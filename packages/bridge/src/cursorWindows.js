@@ -1,8 +1,11 @@
-const { execSync } = require('child_process')
+const { execFileSync } = require('child_process')
+const path = require('path')
+
+const LIST_SCRIPT = path.join(__dirname, '..', 'scripts', 'list-cursor-windows.ps1')
 
 function decodeTitlesFromJson(raw) {
   const trimmed = raw.trim()
-  if (!trimmed) return []
+  if (!trimmed || trimmed === '[]') return []
   const parsed = JSON.parse(trimmed)
   const items = typeof parsed === 'string' ? [parsed] : Array.isArray(parsed) ? parsed : []
   return items
@@ -19,18 +22,13 @@ function decodeTitlesFromJson(raw) {
 function listCursorWindows() {
   if (process.platform !== 'win32') return []
   try {
-    const script = [
-      '@(Get-Process -Name Cursor -ErrorAction SilentlyContinue',
-      '| Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle }',
-      '| ForEach-Object { [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($_.MainWindowTitle)) }',
-      '| Select-Object -Unique) | ConvertTo-Json -Compress',
-    ].join(' ')
-    const out = execSync(
-      `powershell -NoProfile -ExecutionPolicy Bypass -Command "${script}"`,
+    const out = execFileSync(
+      'powershell',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', LIST_SCRIPT],
       {
         encoding: 'utf8',
         windowsHide: true,
-        timeout: 8000,
+        timeout: 15000,
       },
     )
     return decodeTitlesFromJson(out)

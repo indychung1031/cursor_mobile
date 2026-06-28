@@ -48,8 +48,8 @@ function renderWindowPicker(cursorWindows, targetWindowTitle) {
 
   const singleHint =
     cursorWindows.length === 1
-      ? '<p class="window-hint">Cursor 창이 <strong>1개</strong>만 열려 있어 목록도 1개입니다. (정상)</p>'
-      : ''
+      ? '<p class="window-hint">Cursor 창이 <strong>1개</strong>만 감지됐습니다. 다른 Cursor 창이 보이면 전면에 두고 「창 목록 새로고침」.</p>'
+      : `<p class="window-hint">Cursor 창 <strong>${cursorWindows.length}개</strong> — 메시지를 받을 창을 선택하세요.</p>`
 
   const items = cursorWindows
     .map((title) => {
@@ -314,8 +314,8 @@ function renderSetupHtml({
         return
       }
       const singleHint = windows.length === 1
-        ? '<p class="window-hint">Cursor 창 1개 — 목록 1개가 정상입니다.</p>'
-        : ''
+        ? '<p class="window-hint">Cursor 창 1개만 감지 — 다른 창을 전면에 두고 새로고침.</p>'
+        : '<p class="window-hint">Cursor 창 ' + windows.length + '개 — 선택하세요.</p>'
       const items = windows.map(function (title) {
         const sel = selected && (title === selected || title.indexOf(selected) >= 0 || selected.indexOf(title) >= 0)
         return '<button type="button" class="window-pick' + (sel ? ' selected' : '') + '" data-title="' + title.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;') + '">' + title.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</button>'
