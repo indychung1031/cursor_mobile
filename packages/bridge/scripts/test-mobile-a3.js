@@ -20,6 +20,16 @@ async function main() {
   if (!health.ok) throw new Error(`Bridge not running on ${port}`)
 
   const html = await (await fetch(`${base}/`)).text()
+  const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1]
+  if (!script) throw new Error('mobile page missing script block')
+  try {
+    // eslint-disable-next-line no-new-func
+    new Function(script)
+  } catch (err) {
+    throw new Error(`mobile page script syntax error: ${err.message}`)
+  }
+  console.log('mobile page script syntax: ok')
+
   for (const needle of REQUIRED) {
     if (!html.includes(needle)) {
       throw new Error(`mobile page missing A3 marker: ${needle}`)

@@ -42,8 +42,11 @@ function renderPairPage({ token = null, error = null }) {
 <body>
   <p>연결 중…</p>
   <script>
-    localStorage.setItem('cm_token', ${safeToken});
-    location.replace('/');
+    (function () {
+      var t = ${safeToken};
+      try { localStorage.setItem('cm_token', t); } catch (_) {}
+      location.replace('/#cm=' + encodeURIComponent(t));
+    })();
   </script>
 </body>
 </html>`

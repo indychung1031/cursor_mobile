@@ -274,7 +274,7 @@ function renderMobileHtml() {
           return
         }
         sel.innerHTML = displays.map(function (d) {
-          const label = d.name + (d.deviceId ? ' · ' + d.deviceId.replace(/\\\\.\\/g, '') : '')
+          const label = d.name || ('모니터 ' + (d.id + 1))
           return '<option value="' + String(d.id).replace(/"/g, '&quot;') + '">' + label + '</option>'
         }).join('')
         const current = selectedDisplay
@@ -386,7 +386,19 @@ function renderMobileHtml() {
       })
     })
 
+    function absorbPairToken() {
+      const hash = location.hash
+      if (!hash.startsWith('#cm=')) return false
+      const t = decodeURIComponent(hash.slice(4))
+      if (t) {
+        try { localStorage.setItem('cm_token', t) } catch (_) {}
+      }
+      history.replaceState({}, '', '/')
+      return !!t
+    }
+
     async function boot() {
+      absorbPairToken()
       const params = new URLSearchParams(location.search)
       const pairErr = params.get('pair_error')
       if (pairErr) {
