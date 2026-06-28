@@ -28,10 +28,12 @@ async function main() {
   if (!pairHtml.includes("localStorage.setItem('cm_token'")) {
     throw new Error('pair page missing token storage script')
   }
-  const tokenMatch = pairHtml.match(/localStorage\.setItem\('cm_token', "([^"]+)"/)
-    || pairHtml.match(/localStorage\.setItem\('cm_token', '([^']+)'/)
+  if (!pairHtml.includes('#cm=')) {
+    throw new Error('pair page missing hash token redirect')
+  }
+  const tokenMatch = pairHtml.match(/var t = ("[^"]+"|'[^']+')/)
   if (!tokenMatch) throw new Error('token not found in pair page')
-  const token = tokenMatch[1]
+  const token = JSON.parse(tokenMatch[1])
   console.log('token from pair page: ok')
 
   const session = await fetch(`${base}/auth/session`, {
