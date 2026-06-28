@@ -17,7 +17,7 @@ const { renderDevHtml } = require('./devPage')
 const { listCursorWindows, listCursorWindowsDetailed } = require('./cursorWindows')
 const { findDisplayBounds, windowCenterOnDisplay } = require('./displayBounds')
 const { registerMjpegStream } = require('./stream/mjpeg')
-const { injectMessage, dryRunFocus } = require('./focus/focus')
+const { injectMessage, dryRunFocus, prepareFocus } = require('./focus/focus')
 const { openSetupPage } = require('./openBrowser')
 const {
   generatePairingCode,
@@ -213,6 +213,17 @@ app.post('/focus/dry-run', { preHandler: requireAuth }, async (req, reply) => {
   } catch (err) {
     app.log.warn({ err }, 'focus dry-run failed')
     return reply.code(500).send({ error: err.message || 'dry-run failed' })
+  }
+})
+
+app.post('/focus/prepare', { preHandler: requireAuth }, async (req, reply) => {
+  const config = loadConfig()
+  const minimizeOthers = req.body?.minimizeOthers === true
+  try {
+    return await prepareFocus(config, { minimizeOthers })
+  } catch (err) {
+    app.log.warn({ err, minimizeOthers }, 'focus prepare failed')
+    return reply.code(500).send({ error: err.message || 'focus prepare failed' })
   }
 })
 

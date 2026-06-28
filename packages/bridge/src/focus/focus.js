@@ -50,7 +50,7 @@ async function appendDisplayArgs(args, config) {
   }
 }
 
-async function buildInjectScriptArgs(config, mode = 'inject') {
+async function buildInjectScriptArgs(config, mode = 'inject', options = {}) {
   const args = [
     '-NoProfile',
     '-ExecutionPolicy',
@@ -63,6 +63,7 @@ async function buildInjectScriptArgs(config, mode = 'inject') {
   await appendDisplayArgs(args, config)
   if (mode === 'dry-run') args.push('-DryRun')
   else if (mode === 'focus') args.push('-FocusOnly')
+  if (options.minimizeOthers) args.push('-MinimizeOthers')
   return args
 }
 
@@ -89,10 +90,16 @@ async function dryRunFocus(config = {}) {
 }
 
 /** Activate Cursor window and click the Agent input field. */
-async function focusWindow(config = {}) {
-  const args = await buildInjectScriptArgs(config, 'focus')
+async function prepareFocus(config = {}, options = {}) {
+  const minimizeOthers = options.minimizeOthers === true
+  const args = await buildInjectScriptArgs(config, 'focus', { minimizeOthers })
   runInjectScript(args)
-  return { ok: true }
+  return { ok: true, minimizeOthers }
+}
+
+/** @deprecated alias — use prepareFocus */
+async function focusWindow(config = {}) {
+  return prepareFocus(config, { minimizeOthers: false })
 }
 
 /** Write clipboard + focus + paste + Enter (Phase 1 message inject). */
@@ -106,6 +113,7 @@ async function injectMessage(text, config = {}) {
 module.exports = {
   buildInjectScriptArgs,
   dryRunFocus,
+  prepareFocus,
   focusWindow,
   injectMessage,
 }

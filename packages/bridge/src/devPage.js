@@ -74,10 +74,12 @@ function renderDevHtml({ port }) {
   </div>
   <pre id="focus-log">(대기 — 클릭·붙여넣기 없이 대상 창·좌표만 확인)</pre>
 
-  <h2>Slice B — 집중 준비 <span class="tag planned">B2</span></h2>
+  <h2>Slice B — 집중 준비 <span class="tag live">B2</span></h2>
   <div class="row">
-    <button type="button" disabled title="WP-B2 구현 후 활성화">POST /focus/prepare</button>
+    <button type="button" onclick="focusPrepare(false)">집중 준비 (minimizeOthers: false)</button>
+    <button type="button" class="secondary" onclick="focusPrepare(true)">집중 준비 (다른 창 최소화)</button>
   </div>
+  <pre id="prepare-log">(Cursor 전면 + 입력창 클릭 — 붙여넣기 없음)</pre>
 
   <h2>Slice C — 스크롤 <span class="tag planned">C1</span></h2>
   <div class="row">
@@ -172,6 +174,19 @@ function renderDevHtml({ port }) {
         const data = await res.json()
         log('focus-log', { status: res.status, ...data }, res.ok)
       } catch (e) { log('focus-log', e.message, false) }
+    }
+
+    async function focusPrepare(minimizeOthers) {
+      if (!token()) { log('prepare-log', '먼저 pair → token 저장', false); return }
+      try {
+        const res = await fetch('/focus/prepare', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ minimizeOthers: !!minimizeOthers }),
+        })
+        const data = await res.json()
+        log('prepare-log', { status: res.status, ...data }, res.ok)
+      } catch (e) { log('prepare-log', e.message, false) }
     }
 
     function toggleStream() {

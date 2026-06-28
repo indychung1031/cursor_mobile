@@ -10,7 +10,8 @@ param(
   [int]$DisplayRight = 0,
   [int]$DisplayBottom = 0,
   [switch]$DryRun,
-  [switch]$FocusOnly
+  [switch]$FocusOnly,
+  [switch]$MinimizeOthers
 )
 
 $ErrorActionPreference = 'Stop'
@@ -204,6 +205,18 @@ function Click-TargetInput {
   Start-Sleep -Milliseconds 180
 }
 
+function Minimize-OtherWindows {
+  param([IntPtr]$KeepHwnd)
+  $keepRoot = [WinInput]::GetAncestor($KeepHwnd, [WinInput]::GA_ROOT)
+  Get-Process | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } | ForEach-Object {
+    $h = $_.MainWindowHandle
+    if ($h -eq $KeepHwnd) { return }
+    $root = [WinInput]::GetAncestor($h, [WinInput]::GA_ROOT)
+    if ($root -eq $keepRoot) { return }
+    [void][WinInput]::ShowWindow($h, 6)
+  }
+}
+
 $target = Get-TargetCursor -Title $WindowTitle -DispLeft $DisplayLeft -DispTop $DisplayTop `
   -DispRight $DisplayRight -DispBottom $DisplayBottom
 if (-not $target) {
@@ -232,6 +245,11 @@ if ($DryRun) {
     }
   } | ConvertTo-Json -Compress
   exit 0
+}
+
+if ($MinimizeOthers) {
+  Minimize-OtherWindows -KeepHwnd $hwnd
+  Start-Sleep -Milliseconds 150
 }
 
 [WinInput]::ActivateWindow($hwnd)

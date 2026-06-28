@@ -14,7 +14,8 @@
     "test:pair": "node scripts/test-pair.js",
     "test:mobile-a3": "node scripts/test-mobile-a3.js",
     "test:setup-window": "node scripts/test-setup-window.js",
-    "test:focus-b1": "node scripts/test-focus-b1.js"
+    "test:focus-b1": "node scripts/test-focus-b1.js",
+    "test:focus-b2": "node scripts/test-focus-b2.js"
   },
   "engines": {
     "node": ">=18"
