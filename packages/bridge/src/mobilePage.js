@@ -49,7 +49,35 @@ function renderMobileHtml() {
     #focus-toggle { width: auto; margin: 0; padding: 0; accent-color: #0066ff; }
     #status-dot {
       width: 10px; height: 10px; border-radius: 50%; background: #6ee7a0; flex-shrink: 0;
+      cursor: pointer;
     }
+    #health-btn {
+      width: auto; min-width: 32px; margin: 0; padding: 4px 8px; font-size: 0.95rem;
+      background: transparent; color: #aaa; border: 1px solid #444; border-radius: 6px;
+      line-height: 1;
+    }
+    #health-panel {
+      background: #141414; border-bottom: 1px solid #333; padding: 10px 12px 12px;
+      font-size: 0.8rem; flex-shrink: 0;
+    }
+    #health-panel.hidden { display: none !important; }
+    #health-panel h2 {
+      margin: 0 0 8px; font-size: 0.85rem; font-weight: 600; color: #ccc;
+    }
+    .health-grid { display: grid; gap: 6px; }
+    .health-row {
+      display: flex; justify-content: space-between; gap: 8px; align-items: flex-start;
+    }
+    .health-label { color: #888; flex-shrink: 0; }
+    .health-value { text-align: right; color: #eee; }
+    .health-value.ok { color: #6ee7a0; }
+    .health-value.warn { color: #fbbf24; }
+    .health-value.err { color: #f87171; }
+    .health-hint {
+      margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: #1f1a0a;
+      color: #fbbf24; font-size: 0.75rem; line-height: 1.45;
+    }
+    .health-hint.hidden { display: none !important; }
     #stream-wrap {
       flex: 1; min-height: 0; display: flex; align-items: center;
       justify-content: center; background: #0a0a0a; overflow: hidden;
@@ -124,13 +152,25 @@ function renderMobileHtml() {
 
   <div id="app" class="hidden">
     <div id="toolbar">
-      <div id="status-dot"></div>
+      <div id="status-dot" title="상태 패널" role="button" tabindex="0" aria-label="상태 패널"></div>
+      <button type="button" id="health-btn" title="상태" aria-label="상태">⚙</button>
       <span id="toolbar-label">모니터</span>
       <select id="display-select" aria-label="캡처할 모니터 선택"></select>
       <label id="focus-toggle-wrap" for="focus-toggle" title="ON: 전송 전 Cursor 포커스 (다른 창은 유지)">
         <input type="checkbox" id="focus-toggle" aria-label="집중 모드" />
         집중
       </label>
+    </div>
+    <div id="health-panel" class="hidden" aria-live="polite">
+      <h2>연결 상태</h2>
+      <div class="health-grid">
+        <div class="health-row"><span class="health-label">Bridge</span><span class="health-value" id="health-bridge">—</span></div>
+        <div class="health-row"><span class="health-label">Cursor</span><span class="health-value" id="health-cursor">—</span></div>
+        <div class="health-row"><span class="health-label">Tailscale</span><span class="health-value" id="health-tailscale">—</span></div>
+        <div class="health-row"><span class="health-label">스트림</span><span class="health-value" id="health-stream">—</span></div>
+        <div class="health-row"><span class="health-label">마지막 inject</span><span class="health-value" id="health-inject">—</span></div>
+      </div>
+      <p id="health-hint" class="health-hint hidden"></p>
     </div>
     <div id="stream-wrap">
       <img id="stream" alt="Cursor Agent">
@@ -175,11 +215,102 @@ function renderMobileHtml() {
     let swipeStartY = null
     let streamFrozen = false
     let didSwipe = false
+    let healthPanelOpen = false
+    let healthPollTimer = null
     const MAX_STREAM_AUTO_RETRIES = 2
     let sessionPollTimer = null
 
     function setStatusDot(color) {
       document.getElementById('status-dot').style.background = color
+    }
+
+    function healthClass(ok) {
+      return ok ? 'ok' : 'warn'
+    }
+
+    function renderHealthHint(h) {
+      const hint = document.getElementById('health-hint')
+      const tips = []
+      if (!h.cursor?.running) {
+        tips.push('PC에서 Cursor를 실행하세요.')
+      }
+      if (!h.tailscale?.configured) {
+        tips.push('PC .env에 TAILSCALE_IP를 설정하세요.')
+      }
+      if (h.lastInjectError?.message) {
+        tips.push('마지막 inject 오류: ' + h.lastInjectError.message)
+      }
+      if (tips.length === 0) {
+        hint.classList.add('hidden')
+        hint.textContent = ''
+        return
+      }
+      hint.textContent = tips.join(' ')
+      hint.classList.remove('hidden')
+    }
+
+    async function refreshHealthPanel() {
+      try {
+        const res = await fetch('/health')
+        if (!res.ok) return
+        const h = await res.json()
+        const bridgeEl = document.getElementById('health-bridge')
+        const cursorEl = document.getElementById('health-cursor')
+        const tailscaleEl = document.getElementById('health-tailscale')
+        const streamEl = document.getElementById('health-stream')
+        const injectEl = document.getElementById('health-inject')
+
+        bridgeEl.textContent = '가동 ' + (h.bridge?.uptimeSec ?? h.uptimeSec ?? 0) + '초'
+        bridgeEl.className = 'health-value ' + healthClass(h.bridge?.ok !== false)
+
+        cursorEl.textContent = h.cursor?.running ? '실행 중' : '꺼짐'
+        cursorEl.className = 'health-value ' + healthClass(h.cursor?.running)
+
+        tailscaleEl.textContent = h.tailscale?.ip || '(미설정)'
+        tailscaleEl.className = 'health-value ' + healthClass(h.tailscale?.configured)
+
+        const fps = h.stream?.streamFps ?? h.streamFps
+        const clients = h.stream?.activeClients ?? 0
+        streamEl.textContent = fps + ' fps · 시청 ' + clients
+        streamEl.className = 'health-value ok'
+
+        if (h.lastInjectError?.message) {
+          injectEl.textContent = h.lastInjectError.message.slice(0, 48)
+          injectEl.className = 'health-value err'
+        } else {
+          injectEl.textContent = '없음'
+          injectEl.className = 'health-value ok'
+        }
+
+        renderHealthHint(h)
+      } catch (_) {}
+    }
+
+    function stopHealthPoll() {
+      if (healthPollTimer) {
+        clearInterval(healthPollTimer)
+        healthPollTimer = null
+      }
+    }
+
+    function startHealthPoll() {
+      stopHealthPoll()
+      healthPollTimer = setInterval(() => {
+        if (healthPanelOpen) refreshHealthPanel()
+      }, 5000)
+    }
+
+    function toggleHealthPanel() {
+      const panel = document.getElementById('health-panel')
+      healthPanelOpen = !healthPanelOpen
+      if (healthPanelOpen) {
+        panel.classList.remove('hidden')
+        refreshHealthPanel()
+        startHealthPoll()
+      } else {
+        panel.classList.add('hidden')
+        stopHealthPoll()
+      }
     }
 
     function showPairScreen(msg) {
@@ -189,6 +320,9 @@ function renderMobileHtml() {
       document.getElementById('pair-code').value = ''
       if (msg) document.getElementById('pair-error').textContent = msg
       stopSessionPoll()
+      stopHealthPoll()
+      healthPanelOpen = false
+      document.getElementById('health-panel').classList.add('hidden')
     }
 
     function showStreamOverlay(msg) {
@@ -586,6 +720,8 @@ function renderMobileHtml() {
       document.getElementById('force-repair-btn').addEventListener('click', forceRePair)
       document.getElementById('send').addEventListener('click', sendMsg)
       document.getElementById('focus-toggle').addEventListener('change', saveFocusMode)
+      document.getElementById('status-dot').addEventListener('click', toggleHealthPanel)
+      document.getElementById('health-btn').addEventListener('click', toggleHealthPanel)
       document.getElementById('scroll-up').addEventListener('click', () => sendScroll(-SCROLL_STEP))
       document.getElementById('scroll-down').addEventListener('click', () => sendScroll(SCROLL_STEP))
       document.getElementById('live-btn').addEventListener('click', resumeLiveStream)

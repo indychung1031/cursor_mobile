@@ -19,6 +19,7 @@ const { findDisplayBounds, windowCenterOnDisplay } = require('./displayBounds')
 const { registerMjpegStream } = require('./stream/mjpeg')
 const { injectMessage, dryRunFocus, prepareFocus } = require('./focus/focus')
 const { injectScroll, SCROLL_MODES } = require('./scroll/scroll')
+const { recordInjectError, clearInjectError } = require('./bridgeState')
 const { openSetupPage } = require('./openBrowser')
 const {
   generatePairingCode,
@@ -199,10 +200,12 @@ app.post('/message', { preHandler: requireAuth }, async (req, reply) => {
 
   try {
     await injectMessage(text, config)
+    clearInjectError()
     return { ok: true }
   } catch (err) {
+    recordInjectError(err)
     app.log.error({ err }, 'inject failed')
-    return reply.code(500).send({ error: 'inject failed' })
+    return reply.code(500).send({ error: err.message || 'inject failed' })
   }
 })
 
@@ -221,8 +224,11 @@ app.post('/focus/prepare', { preHandler: requireAuth }, async (req, reply) => {
   const config = loadConfig()
   const minimizeOthers = req.body?.minimizeOthers === true
   try {
-    return await prepareFocus(config, { minimizeOthers })
+    const result = await prepareFocus(config, { minimizeOthers })
+    clearInjectError()
+    return result
   } catch (err) {
+    recordInjectError(err)
     app.log.warn({ err, minimizeOthers }, 'focus prepare failed')
     return reply.code(500).send({ error: err.message || 'focus prepare failed' })
   }
@@ -242,8 +248,11 @@ app.post('/scroll', { preHandler: requireAuth }, async (req, reply) => {
 
   const config = loadConfig()
   try {
-    return await injectScroll(deltaY, config, { mode })
+    const result = await injectScroll(deltaY, config, { mode })
+    clearInjectError()
+    return result
   } catch (err) {
+    recordInjectError(err)
     app.log.warn({ err, deltaY, mode }, 'scroll inject failed')
     return reply.code(500).send({ error: err.message || 'scroll failed' })
   }

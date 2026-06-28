@@ -19,7 +19,8 @@
     "test:mobile-b3": "node scripts/test-mobile-b3.js",
     "test:scroll-c1": "node scripts/test-scroll-c1.js",
     "test:mobile-c2": "node scripts/test-mobile-c2.js",
-    "test:mobile-c3": "node scripts/test-mobile-c3.js"
+    "test:mobile-c3": "node scripts/test-mobile-c3.js",
+    "test:health-f1": "node scripts/test-health-f1.js"
   },
   "engines": {
     "node": ">=18"

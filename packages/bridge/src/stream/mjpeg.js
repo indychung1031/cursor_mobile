@@ -1,5 +1,10 @@
 const { loadConfig } = require('../config')
 const { captureRegion } = require('../capture')
+const {
+  recordStreamFrame,
+  streamClientConnected,
+  streamClientDisconnected,
+} = require('../bridgeState')
 
 const BOUNDARY = 'frame'
 const FRAME_MS = 200
@@ -13,8 +18,10 @@ function registerMjpegStream(app, requireAuth) {
     })
 
     let active = true
+    streamClientConnected()
     req.raw.on('close', () => {
       active = false
+      streamClientDisconnected()
     })
 
     while (active) {
@@ -26,6 +33,7 @@ function registerMjpegStream(app, requireAuth) {
         reply.raw.write(`Content-Length: ${frame.length}\r\n\r\n`)
         reply.raw.write(frame)
         reply.raw.write('\r\n')
+        recordStreamFrame()
       } catch (err) {
         app.log.warn({ err }, 'stream frame error')
       }

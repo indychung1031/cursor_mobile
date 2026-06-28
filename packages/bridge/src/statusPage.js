@@ -1,19 +1,55 @@
+const {
+  getStreamStats,
+  getLastInjectError,
+} = require('./bridgeState')
+
+const STREAM_TARGET_FPS = 5
+
 function getHealthPayload(deps) {
   const { port, isCursorRunning, getTailscaleIp, getBridgeUrls } = deps
   const urls = getBridgeUrls(port)
+  const tailscaleIp = getTailscaleIp()
+  const cursorRunning = isCursorRunning()
+  const uptimeSec = Math.floor(process.uptime())
+  const stream = getStreamStats(STREAM_TARGET_FPS)
+  const lastInjectError = getLastInjectError()
+
+  const bridgeOk = true
+  const cursorOk = cursorRunning
+  const tailscaleOk = Boolean(tailscaleIp)
+
   return {
+    ok: bridgeOk && cursorOk,
     status: 'ok',
     mode: 'b',
-    cursorRunning: isCursorRunning(),
-    uptimeSec: Math.floor(process.uptime()),
-    tailscaleIp: getTailscaleIp(),
+    cursorRunning,
+    uptimeSec,
+    tailscaleIp: tailscaleIp || null,
     urls,
+    bridge: {
+      ok: bridgeOk,
+      uptimeSec,
+      port,
+    },
+    cursor: {
+      ok: cursorOk,
+      running: cursorRunning,
+    },
+    tailscale: {
+      ok: tailscaleOk,
+      configured: tailscaleOk,
+      ip: tailscaleIp || null,
+    },
+    stream,
+    streamFps: stream.streamFps,
+    lastInjectError,
   }
 }
 
 function renderStatusHtml(payload) {
-  const cursorOk = payload.cursorRunning
+  const cursorOk = payload.cursor?.running ?? payload.cursorRunning
   const uptimeMin = Math.floor(payload.uptimeSec / 60)
+  const tsIp = payload.tailscale?.ip ?? payload.tailscaleIp
 
   return `<!DOCTYPE html>
 <html lang="ko">
@@ -50,17 +86,18 @@ function renderStatusHtml(payload) {
 <body>
   <div class="card">
     <h1>cursor_mobile Bridge</h1>
-    <span class="badge ok">연결됨</span>
+    <span class="badge ${payload.ok ? 'ok' : 'warn'}">${payload.ok ? '정상' : '확인 필요'}</span>
     <dl>
       <dt>상태</dt><dd>${payload.status} (B모드)</dd>
       <dt>Cursor 실행</dt><dd>${cursorOk ? '✅ 실행 중' : '⚠️ 꺼짐 — PC에서 Cursor를 켜 주세요'}</dd>
       <dt>Bridge 가동</dt><dd>${uptimeMin}분 (${payload.uptimeSec}초)</dd>
-      <dt>Tailscale IP</dt><dd>${payload.tailscaleIp || '(미설정)'}</dd>
+      <dt>Tailscale IP</dt><dd>${tsIp || '(미설정 — .env TAILSCALE_IP)'}</dd>
+      <dt>스트림 FPS</dt><dd>${payload.streamFps ?? payload.stream?.streamFps ?? '—'}</dd>
     </dl>
-    <p class="hint">JSON API: <code>/health</code><br>Phase 1에서 이 화면에 영상·채팅이 추가됩니다.</p>
+    <p class="hint">JSON API: <code>/health</code> · 모바일 앱에서 상태 점(●) 탭</p>
   </div>
 </body>
 </html>`
 }
 
-module.exports = { getHealthPayload, renderStatusHtml }
+module.exports = { getHealthPayload, renderStatusHtml, STREAM_TARGET_FPS }
