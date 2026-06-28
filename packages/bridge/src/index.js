@@ -13,7 +13,6 @@ const { getHealthPayload } = require('./statusPage')
 const { renderMobileHtml } = require('./mobilePage')
 const { renderSetupHtml, getLanIp } = require('./setupPage')
 const { toPngBuffer, isAllowedQrUrl } = require('./qr')
-const { renderPairPage } = require('./pairPage')
 const { renderDevHtml } = require('./devPage')
 const { listCursorWindows } = require('./cursorWindows')
 const { registerMjpegStream } = require('./stream/mjpeg')
@@ -33,6 +32,14 @@ const HOST = process.env.BRIDGE_HOST || '0.0.0.0'
 
 const app = fastify({ logger: true })
 
+function sendHtml(reply, html) {
+  return reply
+    .header('Cache-Control', 'no-store, no-cache, must-revalidate')
+    .header('Pragma', 'no-cache')
+    .type('text/html; charset=utf-8')
+    .send(html)
+}
+
 const healthDeps = () => ({
   port: PORT,
   isCursorRunning,
@@ -40,9 +47,7 @@ const healthDeps = () => ({
   getBridgeUrls,
 })
 
-app.get('/', async (_req, reply) => {
-  return reply.type('text/html; charset=utf-8').send(renderMobileHtml())
-})
+app.get('/', async (_req, reply) => sendHtml(reply, renderMobileHtml()))
 
 app.get('/setup', async (_req, reply) => {
   const config = loadConfig()
@@ -53,7 +58,7 @@ app.get('/setup', async (_req, reply) => {
     cursorWindows: listCursorWindows(),
     targetWindowTitle: config.targetWindowTitle || '',
   })
-  return reply.type('text/html; charset=utf-8').send(html)
+  return sendHtml(reply, html)
 })
 
 app.get('/setup/qr', async (req, reply) => {
@@ -81,12 +86,10 @@ app.get('/pair', async (req, reply) => {
     return reply.redirect('/')
   }
   if (!verifyPairingCode(code)) {
-    return reply
-      .type('text/html; charset=utf-8')
-      .send(renderPairPage({ error: 'invalid' }))
+    return reply.redirect('/?pair_error=invalid')
   }
   const token = signToken()
-  return reply.type('text/html; charset=utf-8').send(renderPairPage({ token }))
+  return reply.redirect(`/?cm_token=${encodeURIComponent(token)}`)
 })
 
 if (process.env.BRIDGE_DEV === '1') {

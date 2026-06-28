@@ -22,19 +22,17 @@ async function main() {
   }
   console.log('pairing code:', code)
 
-  const pairRes = await fetch(`${base}/pair?code=${encodeURIComponent(code)}`)
-  const pairHtml = await pairRes.text()
-  if (!pairRes.ok) throw new Error(`pair HTTP ${pairRes.status}`)
-  if (!pairHtml.includes("localStorage.setItem('cm_token'")) {
-    throw new Error('pair page missing token storage script')
+  const pairRes = await fetch(`${base}/pair?code=${encodeURIComponent(code)}`, {
+    redirect: 'manual',
+  })
+  if (pairRes.status !== 302) {
+    throw new Error(`pair should redirect with 302, got ${pairRes.status}`)
   }
-  if (!pairHtml.includes('#cm=')) {
-    throw new Error('pair page missing hash token redirect')
-  }
-  const tokenMatch = pairHtml.match(/var t = ("[^"]+"|'[^']+')/)
-  if (!tokenMatch) throw new Error('token not found in pair page')
-  const token = JSON.parse(tokenMatch[1])
-  console.log('token from pair page: ok')
+  const location = pairRes.headers.get('location') || ''
+  const redirectUrl = new URL(location, base)
+  const token = redirectUrl.searchParams.get('cm_token')
+  if (!token) throw new Error('pair redirect missing cm_token')
+  console.log('token from pair redirect: ok')
 
   const session = await fetch(`${base}/auth/session`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -42,12 +40,20 @@ async function main() {
   if (!session.ok) throw new Error('session failed after pair')
   console.log('session:', await session.json())
 
-  const badPair = await fetch(`${base}/pair?code=000000`)
-  const badHtml = await badPair.text()
-  if (!badHtml.includes('pair_error=invalid')) {
+  const badPair = await fetch(`${base}/pair?code=000000`, { redirect: 'manual' })
+  const badLocation = badPair.headers.get('location') || ''
+  if (!badLocation.includes('pair_error=invalid')) {
     throw new Error('invalid pair should redirect with pair_error')
   }
   console.log('invalid code handling: ok')
+
+  const home = await (await fetch(`${base}/`)).text()
+  if (!home.includes('Cache-Control')) {
+    throw new Error('mobile page should disable cache')
+  }
+  if (!home.includes("getElementById('pair-btn')")) {
+    throw new Error('mobile page should wire pair button with addEventListener')
+  }
 
   const setup = await (await fetch(`${base}/setup`)).text()
   if (!setup.includes('/pair?code=')) {

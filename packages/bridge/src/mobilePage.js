@@ -5,6 +5,7 @@ function renderMobileHtml() {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <title>cursor_mobile</title>
   <style>
     * { box-sizing: border-box; }
@@ -80,7 +81,7 @@ function renderMobileHtml() {
       <p class="hint" id="pair-hint">PC <strong>/setup</strong>에서 QR을 스캔하거나 6자리 코드를 입력하세요.<br>Bridge 재시작 직후에도 코드·QR만 있으면 다시 연결할 수 있습니다.</p>
       <input id="pair-code" type="tel" inputmode="numeric" maxlength="6" placeholder="123456" autocomplete="one-time-code" />
       <div id="pair-error" class="error"></div>
-      <button id="pair-btn" class="primary" onclick="doPair()">연결</button>
+      <button id="pair-btn" type="button" class="primary">연결</button>
     </div>
   </div>
 
@@ -88,30 +89,30 @@ function renderMobileHtml() {
     <div id="toolbar">
       <div id="status-dot"></div>
       <span id="toolbar-label">모니터</span>
-      <select id="display-select" onchange="switchDisplay(this.value)" aria-label="캡처할 모니터 선택"></select>
+      <select id="display-select" aria-label="캡처할 모니터 선택"></select>
     </div>
     <div id="stream-wrap">
       <img id="stream" alt="Cursor Agent">
       <div id="stream-overlay" class="hidden">
         <p id="stream-overlay-msg">영상 연결이 끊겼습니다.</p>
         <div class="btn-row">
-          <button type="button" class="primary" onclick="retryStream()">재연결</button>
-          <button type="button" class="secondary" onclick="forceRePair()">새 코드로 연결</button>
+          <button type="button" id="retry-stream-btn" class="primary">재연결</button>
+          <button type="button" id="force-repair-btn" class="secondary">새 코드로 연결</button>
         </div>
       </div>
     </div>
     <div id="input-area">
       <input id="msg" type="text" placeholder="메시지 입력..." enterkeyhint="send" />
-      <button id="send" class="primary" onclick="sendMsg()">전송</button>
+      <button id="send" type="button" class="primary">전송</button>
     </div>
     <div id="send-status"></div>
     <p class="hint" style="padding:0 10px 8px;margin:0;">전송 시 PC 클립보드가 덮어씌워집니다. Cursor가 전면에 있어야 합니다.</p>
   </div>
 
   <script>
-    const token = () => localStorage.getItem('cm_token') || ''
+    const getToken = () => localStorage.getItem('cm_token') || ''
     const headers = (json) => {
-      const h = { Authorization: 'Bearer ' + token() }
+      const h = { Authorization: 'Bearer ' + getToken() }
       if (json) h['Content-Type'] = 'application/json'
       return h
     }
@@ -157,7 +158,7 @@ function renderMobileHtml() {
     function refreshStream() {
       setStatusDot('#fbbf24')
       document.getElementById('stream').src =
-        '/stream?token=' + encodeURIComponent(token()) + '&t=' + Date.now()
+        '/stream?token=' + encodeURIComponent(getToken()) + '&t=' + Date.now()
     }
 
     function handleUnauthorized(msg) {
@@ -172,7 +173,7 @@ function renderMobileHtml() {
 
     /** @returns {Promise<true|false|null>} ok / unauthorized / network */
     async function checkSession() {
-      if (!token()) return false
+      if (!getToken()) return false
       try {
         const res = await fetch('/auth/session', { headers: headers() })
         if (res.ok) return true
@@ -187,7 +188,7 @@ function renderMobileHtml() {
     }
 
     async function retryStream() {
-      if (!token()) {
+      if (!getToken()) {
         showPairScreen('PC /setup에서 QR 또는 코드로 연결하세요.')
         return
       }
@@ -207,7 +208,7 @@ function renderMobileHtml() {
     }
 
     async function onStreamLost() {
-      if (!token()) {
+      if (!getToken()) {
         showPairScreen('연결이 끊겼습니다. PC /setup에서 다시 연결하세요.')
         return
       }
@@ -341,7 +342,7 @@ function renderMobileHtml() {
     })
 
     async function tryResume() {
-      if (!token()) return
+      if (!getToken()) return
       const session = await checkSession()
       if (session === true) {
         showApp()
@@ -374,7 +375,7 @@ function renderMobileHtml() {
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'visible') return
-      if (!token() || document.getElementById('app').classList.contains('hidden')) return
+      if (!getToken() || document.getElementById('app').classList.contains('hidden')) return
       checkSession().then(session => {
         if (session === false) {
           handleUnauthorized()
@@ -387,14 +388,25 @@ function renderMobileHtml() {
     })
 
     function absorbPairToken() {
-      const hash = location.hash
-      if (!hash.startsWith('#cm=')) return false
-      const t = decodeURIComponent(hash.slice(4))
-      if (t) {
-        try { localStorage.setItem('cm_token', t) } catch (_) {}
+      const params = new URLSearchParams(location.search)
+      let t = params.get('cm_token')
+      if (!t && location.hash.startsWith('#cm=')) {
+        t = decodeURIComponent(location.hash.slice(4))
       }
+      if (!t) return false
+      try { localStorage.setItem('cm_token', t) } catch (_) {}
       history.replaceState({}, '', '/')
-      return !!t
+      return true
+    }
+
+    function wireUi() {
+      document.getElementById('pair-btn').addEventListener('click', doPair)
+      document.getElementById('display-select').addEventListener('change', function () {
+        switchDisplay(this.value)
+      })
+      document.getElementById('retry-stream-btn').addEventListener('click', retryStream)
+      document.getElementById('force-repair-btn').addEventListener('click', forceRePair)
+      document.getElementById('send').addEventListener('click', sendMsg)
     }
 
     async function boot() {
@@ -409,11 +421,12 @@ function renderMobileHtml() {
         history.replaceState({}, '', '/')
         return
       }
-      if (token()) {
+      if (getToken()) {
         await tryResume()
       }
     }
 
+    wireUi()
     boot()
   </script>
 </body>
