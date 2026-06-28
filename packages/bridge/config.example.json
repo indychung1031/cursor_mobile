@@ -1,14 +1,15 @@
 {
   "selectedDisplay": 0,
   "region": {
-    "x": 1200,
-    "y": 100,
-    "width": 600,
-    "height": 900
+    "x": 1410,
+    "y": 36,
+    "width": 530,
+    "height": 1000
   },
-  "inputCoord": {
-    "x": 1500,
-    "y": 950
+  "inputOffset": {
+    "xRatio": 0.72,
+    "fromBottom": 38
   },
+  "targetWindowTitle": "cursor_mobile",
   "jpegQuality": 75
 }

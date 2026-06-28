@@ -1,7 +1,9 @@
 node_modules/
 packages/bridge/output/
 packages/bridge/config.json
+packages/bridge/.bridge-secret
 packages/bridge/.powercfg-state.json
+packages/bridge/src/.bridge-secret
 .env
 !.env.example
 .claude/

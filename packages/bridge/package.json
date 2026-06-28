@@ -7,15 +7,23 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test:capture": "node scripts/test-capture.js"
+    "dev:verify": "node -e \"process.env.BRIDGE_DEV='1'; require('./src/index.js')\"",
+    "test:capture": "node scripts/test-capture.js",
+    "calibrate": "node scripts/calibrate.js",
+    "test:setup-qr": "node scripts/test-setup-qr.js",
+    "test:pair": "node scripts/test-pair.js",
+    "test:mobile-a3": "node scripts/test-mobile-a3.js"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
+    "clipboardy": "^2.3.0",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.1",
     "jimp": "^0.22.12",
+    "jsonwebtoken": "^9.0.2",
+    "qrcode": "^1.5.4",
     "screenshot-desktop": "^1.15.0"
   }
 }

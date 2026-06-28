@@ -2,10 +2,10 @@
 
 | 항목 | 내용 |
 |------|------|
-| 문서 버전 | v0.5.0 |
-| 작성일 | 2026-06-27 |
-| 기반 문서 | [기획서.md](기획서.md) v0.4.0 |
-| 상태 | **착수 가능** |
+| 문서 버전 | v0.6.0 |
+| 작성일 | 2026-06-28 |
+| 기반 문서 | [ux_expansion_plan.md](ux_expansion_plan.md) v1.4.0 |
+| 상태 | **Phase 1.5 MVP 착수** |
 
 ---
 
@@ -17,6 +17,29 @@
 | v0.3.0 | 2026-06-27 | ttyd + tmux 방식 |
 | v0.4.0 | 2026-06-27 | **B모드(스트리밍) 우선, A모드(Extension) 향후** |
 | v0.5.0 | 2026-06-27 | 다중 모니터 지원, 대기모드 대응, Phase 0 조기 검증 추가 |
+| v0.6.0 | 2026-06-28 | **Phase 1.5 MVP** API·파일 매핑 — [ux_expansion_plan §17.1](ux_expansion_plan.md#171-phase-15-mvp-공식-범위) |
+
+---
+
+## Phase 1.5 MVP — API · 파일 매핑
+
+> D/E API는 **1.5+** — calibrate 위저드 후. 상세는 ux_expansion_plan 부록.
+
+| WP | API / UI | 신규·수정 파일 (예상) |
+|----|----------|----------------------|
+| A1 | `/setup` QR img | `setupPage.js`, `qrcode` dep 또는 API route |
+| A2 | `GET /pair?code=` | `index.js`, `mobilePage.js` (auto token) |
+| A3 | 재페어링 UX | `mobilePage.js` |
+| A4 | 창 선택 → config | `setupPage.js`, `POST /config/window` |
+| B1 | inject 공통 | `inject/focus.js`, `scripts/inject.ps1` refactor |
+| B2 | `POST /focus/prepare` | `focus/prepare.js`, `scripts/focus.ps1` |
+| B3 | 집중 토글 | `mobilePage.js`, `/message` pre-hook |
+| C1 | `POST /scroll` | `scroll/inject.js`, `scripts/scroll.ps1` |
+| C2 | 모바일 ↑↓ | `mobilePage.js` |
+| C3 | Freeze | `mobilePage.js` (client-only) |
+| F1 | `/health` 확장 | `statusPage.js`, `mobilePage.js` |
+
+**검증:** [wp_verify_runbook.md](wp_verify_runbook.md) · `npm run dev:verify`
 
 ---
 

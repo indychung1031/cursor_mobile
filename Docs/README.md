@@ -7,14 +7,16 @@
 | 문서 | 설명 |
 |------|------|
 | [기획서.md](기획서.md) | 제품 기획서 (§9 체크리스트, §11 iPhone 앱 vs Safari) |
+| [ux_expansion_plan.md](ux_expansion_plan.md) | **사용성 확장 v1.4** — Phase 1.5 MVP 확정 |
+| [wp_verify_runbook.md](wp_verify_runbook.md) | **WP별 검증** — PC `/dev` + iPhone |
+| [spike_phaseA_checklist.md](spike_phaseA_checklist.md) | A-mode 스파이크 (MVP Go 후) |
 | [implementation_plan.md](implementation_plan.md) | 구현 계획서 (API, 코드 스니펫) |
 | [phase0_runbook.md](phase0_runbook.md) | Phase 0 실행 가이드 |
 
-## 현재 상태 (v0.7.0)
+## 현재 상태 (v0.7.4)
 
-- **Phase 0~1:** 모니터 ON + Cursor 전면, **잠금·절전 배제**
-- **Phase 1 클라이언트:** iPhone **Safari(웹)** 우선
-- **Phase 3 백로그:** Win+L 잠금 대응, iOS 네이티브 재논의
+- **Phase 0~1:** ✅ B-mode 동작 검증
+- **Phase 1.5 MVP:** [ux_expansion_plan §17.1](ux_expansion_plan.md#171-phase-15-mvp-공식-범위) — A·B·C·F1 착수 (D/E 보류)
 
 ```
 [ iPhone Safari ] → Tailscale → [ Bridge @ PC ] → MJPEG + 클립보드 → Cursor Agent
