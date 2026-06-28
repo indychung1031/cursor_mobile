@@ -1,0 +1,7 @@
+node_modules/
+packages/bridge/output/
+packages/bridge/config.json
+packages/bridge/.powercfg-state.json
+.env
+!.env.example
+.claude/

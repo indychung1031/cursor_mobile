@@ -1,0 +1,21 @@
+{
+  "name": "@cursor-mobile/bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "cursor_mobile Bridge Server (B-mode)",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test:capture": "node scripts/test-capture.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.1",
+    "jimp": "^0.22.12",
+    "screenshot-desktop": "^1.15.0"
+  }
+}
