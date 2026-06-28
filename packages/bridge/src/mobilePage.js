@@ -53,8 +53,21 @@ function renderMobileHtml() {
     #stream-wrap {
       flex: 1; min-height: 0; display: flex; align-items: center;
       justify-content: center; background: #0a0a0a; overflow: hidden;
-      position: relative;
+      position: relative; touch-action: pan-x pinch-zoom;
     }
+    #scroll-controls {
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      display: flex; flex-direction: column; gap: 8px; z-index: 2;
+      pointer-events: none;
+    }
+    #scroll-controls button {
+      width: 44px; height: 44px; min-width: 44px; margin: 0; padding: 0;
+      border-radius: 50%; border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(0,0,0,0.45); color: #fff; font-size: 1.1rem;
+      line-height: 1; pointer-events: auto; backdrop-filter: blur(4px);
+    }
+    #scroll-controls button:active { background: rgba(0,102,255,0.55); }
+    #scroll-controls button:disabled { opacity: 0.35; }
     #stream-overlay {
       position: absolute; inset: 0; display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 12px; padding: 24px;
@@ -64,6 +77,24 @@ function renderMobileHtml() {
     #stream-overlay p { margin: 0; color: #ccc; font-size: 0.9rem; line-height: 1.5; }
     #stream {
       max-width: 100%; max-height: 100%; width: 100%; object-fit: contain;
+    }
+    #stream-freeze {
+      max-width: 100%; max-height: 100%; width: 100%; height: 100%;
+      object-fit: contain; display: none;
+    }
+    #freeze-bar {
+      position: absolute; left: 10px; top: 10px; z-index: 3;
+      display: none; align-items: center; gap: 8px;
+    }
+    #freeze-bar.visible { display: flex; }
+    #freeze-badge {
+      font-size: 0.75rem; padding: 4px 10px; border-radius: 999px;
+      background: rgba(251, 191, 36, 0.2); color: #fbbf24;
+      border: 1px solid rgba(251, 191, 36, 0.45);
+    }
+    #live-btn {
+      width: auto; min-width: 64px; margin: 0; padding: 6px 12px;
+      font-size: 0.8rem; border-radius: 999px;
     }
     #input-area {
       display: flex; gap: 8px; padding: 10px; background: #1a1a1a;
@@ -103,6 +134,15 @@ function renderMobileHtml() {
     </div>
     <div id="stream-wrap">
       <img id="stream" alt="Cursor Agent">
+      <canvas id="stream-freeze" aria-hidden="true"></canvas>
+      <div id="freeze-bar">
+        <span id="freeze-badge">멈춤</span>
+        <button type="button" id="live-btn" class="primary">라이브</button>
+      </div>
+      <div id="scroll-controls" aria-label="스크롤">
+        <button type="button" id="scroll-up" title="위로 스크롤" aria-label="위로 스크롤">↑</button>
+        <button type="button" id="scroll-down" title="아래로 스크롤" aria-label="아래로 스크롤">↓</button>
+      </div>
       <div id="stream-overlay" class="hidden">
         <p id="stream-overlay-msg">영상 연결이 끊겼습니다.</p>
         <div class="btn-row">
@@ -128,7 +168,13 @@ function renderMobileHtml() {
     }
 
     const FOCUS_KEY = 'cm_focus_mode'
+    const SCROLL_STEP = 240
+    const SWIPE_MIN_PX = 48
     let streamAutoRetries = 0
+    let scrollBusy = false
+    let swipeStartY = null
+    let streamFrozen = false
+    let didSwipe = false
     const MAX_STREAM_AUTO_RETRIES = 2
     let sessionPollTimer = null
 
@@ -161,6 +207,11 @@ function renderMobileHtml() {
       document.getElementById('app').classList.remove('hidden')
       hideStreamOverlay()
       streamAutoRetries = 0
+      streamFrozen = false
+      didSwipe = false
+      document.getElementById('stream').classList.remove('hidden')
+      document.getElementById('stream-freeze').style.display = 'none'
+      document.getElementById('freeze-bar').classList.remove('visible')
       loadFocusMode()
       refreshStream()
       loadDisplays()
@@ -168,9 +219,43 @@ function renderMobileHtml() {
     }
 
     function refreshStream() {
+      if (streamFrozen) return
       setStatusDot('#fbbf24')
       document.getElementById('stream').src =
         '/stream?token=' + encodeURIComponent(getToken()) + '&t=' + Date.now()
+    }
+
+    function freezeStream() {
+      if (streamFrozen) return
+      const img = document.getElementById('stream')
+      const canvas = document.getElementById('stream-freeze')
+      const w = img.naturalWidth || img.clientWidth
+      const h = img.naturalHeight || img.clientHeight
+      if (!w || !h) return
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')
+      try {
+        ctx.drawImage(img, 0, 0, w, h)
+      } catch (_) {
+        return
+      }
+      img.removeAttribute('src')
+      img.classList.add('hidden')
+      canvas.style.display = 'block'
+      document.getElementById('freeze-bar').classList.add('visible')
+      streamFrozen = true
+      setStatusDot('#fbbf24')
+    }
+
+    function resumeLiveStream() {
+      if (!streamFrozen) return
+      streamFrozen = false
+      document.getElementById('stream').classList.remove('hidden')
+      document.getElementById('stream-freeze').style.display = 'none'
+      document.getElementById('freeze-bar').classList.remove('visible')
+      refreshStream()
+      hideStreamOverlay()
     }
 
     function handleUnauthorized(msg) {
@@ -324,6 +409,57 @@ function renderMobileHtml() {
       localStorage.setItem(FOCUS_KEY, isFocusModeOn() ? '1' : '0')
     }
 
+    function setScrollBusy(busy) {
+      scrollBusy = busy
+      document.getElementById('scroll-up').disabled = busy
+      document.getElementById('scroll-down').disabled = busy
+    }
+
+    async function sendScroll(deltaY) {
+      if (!getToken() || scrollBusy) return
+      setScrollBusy(true)
+      try {
+        const res = await fetch('/scroll', {
+          method: 'POST',
+          headers: headers(true),
+          body: JSON.stringify({ deltaY, mode: 'wheel' }),
+        })
+        if (res.status === 401) {
+          handleUnauthorized('인증이 만료되었습니다. PC /setup에서 다시 연결하세요.')
+          return
+        }
+        if (res.ok) {
+          setTimeout(function () { if (!streamFrozen) refreshStream() }, 180)
+        }
+      } catch (_) {
+        /* ignore transient network errors during scroll */
+      } finally {
+        setScrollBusy(false)
+      }
+    }
+
+    function onStreamTouchStart(e) {
+      if (streamFrozen) return
+      if (e.touches.length !== 1) { swipeStartY = null; return }
+      swipeStartY = e.touches[0].clientY
+    }
+
+    function onStreamTouchEnd(e) {
+      if (streamFrozen) return
+      if (swipeStartY == null || !e.changedTouches.length) return
+      const dy = e.changedTouches[0].clientY - swipeStartY
+      swipeStartY = null
+      if (Math.abs(dy) < SWIPE_MIN_PX) return
+      didSwipe = true
+      sendScroll(dy > 0 ? SCROLL_STEP : -SCROLL_STEP)
+    }
+
+    function onStreamTap() {
+      if (didSwipe) { didSwipe = false; return }
+      if (streamFrozen) return
+      freezeStream()
+    }
+
     async function sendMsg() {
       const text = document.getElementById('msg').value.trim()
       if (!text) return
@@ -450,6 +586,13 @@ function renderMobileHtml() {
       document.getElementById('force-repair-btn').addEventListener('click', forceRePair)
       document.getElementById('send').addEventListener('click', sendMsg)
       document.getElementById('focus-toggle').addEventListener('change', saveFocusMode)
+      document.getElementById('scroll-up').addEventListener('click', () => sendScroll(-SCROLL_STEP))
+      document.getElementById('scroll-down').addEventListener('click', () => sendScroll(SCROLL_STEP))
+      document.getElementById('live-btn').addEventListener('click', resumeLiveStream)
+      document.getElementById('stream').addEventListener('click', onStreamTap)
+      const streamWrap = document.getElementById('stream-wrap')
+      streamWrap.addEventListener('touchstart', onStreamTouchStart, { passive: true })
+      streamWrap.addEventListener('touchend', onStreamTouchEnd, { passive: true })
     }
 
     async function boot() {
