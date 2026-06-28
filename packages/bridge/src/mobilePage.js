@@ -41,6 +41,12 @@ function renderMobileHtml() {
       font-size: 0.8rem; color: #aaa; white-space: nowrap; flex-shrink: 0;
     }
     #display-select { flex: 1; margin: 0; min-width: 0; font-size: 15px; }
+    #focus-toggle-wrap {
+      display: flex; align-items: center; gap: 4px; font-size: 0.8rem;
+      color: #aaa; white-space: nowrap; flex-shrink: 0; cursor: pointer;
+      user-select: none;
+    }
+    #focus-toggle { width: auto; margin: 0; padding: 0; accent-color: #0066ff; }
     #status-dot {
       width: 10px; height: 10px; border-radius: 50%; background: #6ee7a0; flex-shrink: 0;
     }
@@ -90,6 +96,10 @@ function renderMobileHtml() {
       <div id="status-dot"></div>
       <span id="toolbar-label">모니터</span>
       <select id="display-select" aria-label="캡처할 모니터 선택"></select>
+      <label id="focus-toggle-wrap" for="focus-toggle" title="ON: 전송 전 Cursor 포커스 (다른 창은 유지)">
+        <input type="checkbox" id="focus-toggle" aria-label="집중 모드" />
+        집중
+      </label>
     </div>
     <div id="stream-wrap">
       <img id="stream" alt="Cursor Agent">
@@ -117,6 +127,7 @@ function renderMobileHtml() {
       return h
     }
 
+    const FOCUS_KEY = 'cm_focus_mode'
     let streamAutoRetries = 0
     const MAX_STREAM_AUTO_RETRIES = 2
     let sessionPollTimer = null
@@ -150,6 +161,7 @@ function renderMobileHtml() {
       document.getElementById('app').classList.remove('hidden')
       hideStreamOverlay()
       streamAutoRetries = 0
+      loadFocusMode()
       refreshStream()
       loadDisplays()
       startSessionPoll()
@@ -299,6 +311,19 @@ function renderMobileHtml() {
       } catch (_) {}
     }
 
+    function isFocusModeOn() {
+      return document.getElementById('focus-toggle').checked
+    }
+
+    function loadFocusMode() {
+      const el = document.getElementById('focus-toggle')
+      el.checked = localStorage.getItem(FOCUS_KEY) === '1'
+    }
+
+    function saveFocusMode() {
+      localStorage.setItem(FOCUS_KEY, isFocusModeOn() ? '1' : '0')
+    }
+
     async function sendMsg() {
       const text = document.getElementById('msg').value.trim()
       if (!text) return
@@ -308,6 +333,23 @@ function renderMobileHtml() {
       status.textContent = '전송 중…'
       btn.disabled = true
       try {
+        if (isFocusModeOn()) {
+          const prep = await fetch('/focus/prepare', {
+            method: 'POST',
+            headers: headers(true),
+            body: JSON.stringify({ minimizeOthers: false }),
+          })
+          if (prep.status === 401) {
+            handleUnauthorized('인증이 만료되었습니다. PC /setup에서 다시 연결하세요.')
+            return
+          }
+          if (!prep.ok) {
+            const prepData = await prep.json().catch(() => ({}))
+            status.className = 'err'
+            status.textContent = prepData.error || ('집중 준비 실패 (' + prep.status + ')')
+            return
+          }
+        }
         const res = await fetch('/message', {
           method: 'POST',
           headers: headers(true),
@@ -407,6 +449,7 @@ function renderMobileHtml() {
       document.getElementById('retry-stream-btn').addEventListener('click', retryStream)
       document.getElementById('force-repair-btn').addEventListener('click', forceRePair)
       document.getElementById('send').addEventListener('click', sendMsg)
+      document.getElementById('focus-toggle').addEventListener('change', saveFocusMode)
     }
 
     async function boot() {
