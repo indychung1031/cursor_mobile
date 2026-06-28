@@ -118,8 +118,9 @@ app.post('/auth/pair', async (req, reply) => {
 app.get('/auth/session', { preHandler: requireAuth }, async () => ({ ok: true }))
 
 app.get('/displays', { preHandler: requireAuth }, async () => {
+  const config = loadConfig()
   const displays = await listDisplays()
-  return { displays }
+  return { displays, selectedDisplay: config.selectedDisplay ?? 0 }
 })
 
 app.get('/setup/windows', async () => {

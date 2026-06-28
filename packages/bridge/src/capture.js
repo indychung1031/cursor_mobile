@@ -5,9 +5,13 @@ const Jimp = require('jimp')
 
 async function listDisplays() {
   const displays = await screenshot.listDisplays()
-  return displays.map((d, index) => ({
+  const sorted = [...displays].sort((a, b) => (a.left ?? 0) - (b.left ?? 0))
+  return sorted.map((d, index) => ({
     id: d.id ?? index,
-    name: d.name || `Display ${index + 1}`,
+    name: `모니터 ${index + 1}`,
+    deviceId: d.name || String(d.id ?? index),
+    left: d.left ?? 0,
+    width: d.width,
   }))
 }
 

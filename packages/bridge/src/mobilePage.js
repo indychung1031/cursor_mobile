@@ -33,10 +33,13 @@ function renderMobileHtml() {
     .btn-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; width: 100%; }
     .btn-row button { width: auto; min-width: 120px; margin: 0; flex: 1; max-width: 160px; }
     #toolbar {
-      display: flex; gap: 8px; padding: 8px; background: #111;
+      display: flex; gap: 8px; padding: 8px 10px; background: #111;
       align-items: center; flex-shrink: 0;
     }
-    #display-select { flex: 1; margin: 0; }
+    #toolbar-label {
+      font-size: 0.8rem; color: #aaa; white-space: nowrap; flex-shrink: 0;
+    }
+    #display-select { flex: 1; margin: 0; min-width: 0; font-size: 15px; }
     #status-dot {
       width: 10px; height: 10px; border-radius: 50%; background: #6ee7a0; flex-shrink: 0;
     }
@@ -84,7 +87,8 @@ function renderMobileHtml() {
   <div id="app" class="hidden">
     <div id="toolbar">
       <div id="status-dot"></div>
-      <select id="display-select" onchange="switchDisplay(this.value)"></select>
+      <span id="toolbar-label">모니터</span>
+      <select id="display-select" onchange="switchDisplay(this.value)" aria-label="캡처할 모니터 선택"></select>
     </div>
     <div id="stream-wrap">
       <img id="stream" alt="Cursor Agent">
@@ -263,11 +267,22 @@ function renderMobileHtml() {
         const res = await fetch('/displays', { headers: headers() })
         if (res.status === 401) { handleUnauthorized(); return }
         if (!res.ok) return
-        const { displays } = await res.json()
+        const { displays, selectedDisplay } = await res.json()
         const sel = document.getElementById('display-select')
-        sel.innerHTML = displays.map(d =>
-          '<option value="' + d.id + '">' + (d.name || d.id) + '</option>',
-        ).join('')
+        if (!displays || !displays.length) {
+          sel.innerHTML = '<option value="">(모니터 없음)</option>'
+          return
+        }
+        sel.innerHTML = displays.map(function (d) {
+          const label = d.name + (d.deviceId ? ' · ' + d.deviceId.replace(/\\\\.\\/g, '') : '')
+          return '<option value="' + String(d.id).replace(/"/g, '&quot;') + '">' + label + '</option>'
+        }).join('')
+        const current = selectedDisplay
+        const match = displays.find(function (d, i) {
+          return d.id === current || String(d.id) === String(current) || i === current
+        })
+        if (match) sel.value = match.id
+        else if (typeof current === 'number' && displays[current]) sel.value = displays[current].id
       } catch (_) {}
     }
 
