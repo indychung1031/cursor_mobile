@@ -39,9 +39,17 @@ function renderWindowPicker(cursorWindows, targetWindowTitle) {
   const refreshBtn =
     '<button type="button" class="window-refresh secondary" id="window-refresh">창 목록 새로고침</button>'
 
+  const monitorHint =
+    '<p class="window-hint">※ <strong>모니터(1·2·3번)</strong> 선택이 아닙니다. 열려 있는 <strong>Cursor IDE 창</strong> 중 메시지를 받을 창입니다.<br>화면(모니터·잘린 영역)은 iPhone 상단 <strong>Display</strong> 드롭다운 + calibrate(<code>region</code>)로 조정합니다.</p>'
+
   if (!cursorWindows.length) {
-    return `<p class="window-empty">(열린 Cursor 창 없음 — Cursor를 연 뒤 새로고침)</p>${refreshBtn}`
+    return `${monitorHint}<p class="window-empty">(열린 Cursor 창 없음 — Cursor를 연 뒤 새로고침)</p>${refreshBtn}`
   }
+
+  const singleHint =
+    cursorWindows.length === 1
+      ? '<p class="window-hint">Cursor 창이 <strong>1개</strong>만 열려 있어 목록도 1개입니다. (정상)</p>'
+      : ''
 
   const items = cursorWindows
     .map((title) => {
@@ -50,7 +58,7 @@ function renderWindowPicker(cursorWindows, targetWindowTitle) {
     })
     .join('')
 
-  return `<div class="window-list" id="window-list">${items}</div>${refreshBtn}`
+  return `${monitorHint}${singleHint}<div class="window-list" id="window-list">${items}</div>${refreshBtn}`
 }
 
 function renderSetupHtml({
@@ -182,6 +190,11 @@ function renderSetupHtml({
     .window-pick:disabled { opacity: 0.6; cursor: wait; }
     .window-refresh { margin-top: 4px; }
     .window-empty { font-size: 0.82rem; color: #888; margin: 8px 0; }
+    .window-hint {
+      font-size: 0.78rem; color: #888; margin: 0 0 10px; line-height: 1.45;
+      padding: 8px 10px; background: #111; border-radius: 8px; border: 1px solid #2a2a2a;
+    }
+    .window-hint strong { color: #ccc; }
     #window-status { font-size: 0.82rem; min-height: 1.2em; margin-top: 6px; }
     #window-status.ok { color: #6ee7a0; }
     #window-status.err { color: #f87171; }
@@ -294,16 +307,20 @@ function renderSetupHtml({
     function renderWindowList(windows, selected) {
       const picker = document.getElementById('window-picker')
       if (!picker) return
+      const monitorHint = '<p class="window-hint">※ <strong>모니터 선택 아님</strong> — Cursor IDE 창 목록입니다. 화면 영역은 iPhone Display + calibrate.</p>'
       const refreshHtml = '<button type="button" class="window-refresh secondary" id="window-refresh">창 목록 새로고침</button>'
       if (!windows.length) {
-        picker.innerHTML = '<p class="window-empty">(열린 Cursor 창 없음 — Cursor를 연 뒤 새로고침)</p>' + refreshHtml
+        picker.innerHTML = monitorHint + '<p class="window-empty">(열린 Cursor 창 없음 — Cursor를 연 뒤 새로고침)</p>' + refreshHtml
         return
       }
+      const singleHint = windows.length === 1
+        ? '<p class="window-hint">Cursor 창 1개 — 목록 1개가 정상입니다.</p>'
+        : ''
       const items = windows.map(function (title) {
         const sel = selected && (title === selected || title.indexOf(selected) >= 0 || selected.indexOf(title) >= 0)
         return '<button type="button" class="window-pick' + (sel ? ' selected' : '') + '" data-title="' + title.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;') + '">' + title.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</button>'
       }).join('')
-      picker.innerHTML = '<div class="window-list" id="window-list">' + items + '</div>' + refreshHtml
+      picker.innerHTML = monitorHint + singleHint + '<div class="window-list" id="window-list">' + items + '</div>' + refreshHtml
     }
 
     async function selectWindow(title, btn) {
