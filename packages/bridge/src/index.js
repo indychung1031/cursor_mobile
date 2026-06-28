@@ -14,7 +14,8 @@ const { renderMobileHtml } = require('./mobilePage')
 const { renderSetupHtml, getLanIp } = require('./setupPage')
 const { toPngBuffer, isAllowedQrUrl } = require('./qr')
 const { renderDevHtml } = require('./devPage')
-const { listCursorWindows } = require('./cursorWindows')
+const { listCursorWindows, listCursorWindowsDetailed } = require('./cursorWindows')
+const { findDisplayBounds, windowCenterOnDisplay } = require('./displayBounds')
 const { registerMjpegStream } = require('./stream/mjpeg')
 const { injectMessage } = require('./clipboard/inject')
 const { openSetupPage } = require('./openBrowser')
@@ -159,8 +160,29 @@ app.post('/config/display', { preHandler: requireAuth }, async (req) => {
   } else {
     config.selectedDisplay = raw
   }
+
+  const displays = await listDisplays()
+  const bounds = findDisplayBounds(displays, config.selectedDisplay)
+  if (bounds) {
+    const onDisplay = listCursorWindowsDetailed().filter((w) =>
+      windowCenterOnDisplay(w, bounds),
+    )
+    if (onDisplay.length === 1) {
+      config.targetWindowTitle = onDisplay[0].title
+    } else if (onDisplay.length > 1) {
+      const current = onDisplay.find((w) => w.title === config.targetWindowTitle)
+      if (!current) {
+        config.targetWindowTitle = onDisplay[0].title
+      }
+    }
+  }
+
   saveConfig(config)
-  return { ok: true, selectedDisplay: config.selectedDisplay }
+  return {
+    ok: true,
+    selectedDisplay: config.selectedDisplay,
+    targetWindowTitle: config.targetWindowTitle || '',
+  }
 })
 
 app.post('/message', { preHandler: requireAuth }, async (req, reply) => {

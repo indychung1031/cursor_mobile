@@ -4,7 +4,11 @@ param(
   [string]$WindowTitle = '',
   [double]$XRatio = 0.72,
   [int]$FromBottom = 38,
-  [switch]$UseAbsolute
+  [switch]$UseAbsolute,
+  [int]$DisplayLeft = 0,
+  [int]$DisplayTop = 0,
+  [int]$DisplayRight = 0,
+  [int]$DisplayBottom = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -13,9 +17,19 @@ Add-Type -AssemblyName System.Windows.Forms
 
 Add-Type @"
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Drawing;
+
 public struct WinPoint { public int X; public int Y; }
+
+public class CursorInjectWindow {
+  public IntPtr Hwnd;
+  public string Title;
+  public int Left, Top, Right, Bottom;
+}
+
 public class WinInput {
   [DllImport("user32.dll")]
   public static extern void mouse_event(int dwFlags, int dx, int dy, int dwData, int dwExtraInfo);
@@ -66,21 +80,95 @@ public class WinInput {
     return GetAncestor(a, GA_ROOT) == GetAncestor(b, GA_ROOT);
   }
 }
+
 [StructLayout(LayoutKind.Sequential)]
 public struct WinRect {
   public int Left; public int Top; public int Right; public int Bottom;
 }
+
+public static class CursorInjectEnum {
+  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern int GetWindowTextLength(IntPtr hWnd);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out WinRect rect);
+  const uint GW_OWNER = 4;
+  static HashSet<uint> pids = new HashSet<uint>();
+  static List<CursorInjectWindow> list = new List<CursorInjectWindow>();
+  static bool Callback(IntPtr hWnd, IntPtr lParam) {
+    if (!IsWindowVisible(hWnd)) return true;
+    if (GetWindow(hWnd, GW_OWNER) != IntPtr.Zero) return true;
+    uint pid; GetWindowThreadProcessId(hWnd, out pid);
+    if (!pids.Contains(pid)) return true;
+    int len = GetWindowTextLength(hWnd);
+    if (len <= 0) return true;
+    var sb = new StringBuilder(len + 1);
+    GetWindowText(hWnd, sb, sb.Capacity);
+    string title = sb.ToString().Trim();
+    if (title.Length == 0) return true;
+    WinRect rect;
+    if (!GetWindowRect(hWnd, out rect)) return true;
+    foreach (var w in list) { if (w.Title == title) return true; }
+    list.Add(new CursorInjectWindow {
+      Hwnd = hWnd, Title = title,
+      Left = rect.Left, Top = rect.Top, Right = rect.Right, Bottom = rect.Bottom
+    });
+    return true;
+  }
+  public static CursorInjectWindow[] ListWindows() {
+    pids.Clear(); list.Clear();
+    foreach (var p in System.Diagnostics.Process.GetProcessesByName("Cursor")) { pids.Add((uint)p.Id); }
+    EnumWindows(Callback, IntPtr.Zero);
+    return list.ToArray();
+  }
+}
 "@
 
+function Test-WindowOnDisplay {
+  param($Rect, [int]$DispLeft, [int]$DispTop, [int]$DispRight, [int]$DispBottom)
+  if ($DispRight -le $DispLeft -or $DispBottom -le $DispTop) { return $true }
+  $cx = [int](($Rect.Left + $Rect.Right) / 2)
+  $cy = [int](($Rect.Top + $Rect.Bottom) / 2)
+  return ($cx -ge $DispLeft -and $cx -lt $DispRight -and $cy -ge $DispTop -and $cy -lt $DispBottom)
+}
+
 function Get-TargetCursor {
-  param([string]$Title)
-  $candidates = Get-Process -Name Cursor -ErrorAction SilentlyContinue |
-    Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero -and $_.MainWindowTitle }
-  if ($Title) {
-    $found = $candidates | Where-Object { $_.MainWindowTitle -like "*$Title*" } | Select-Object -First 1
-    if ($found) { return $found }
+  param(
+    [string]$Title,
+    [int]$DispLeft,
+    [int]$DispTop,
+    [int]$DispRight,
+    [int]$DispBottom
+  )
+  $all = [CursorInjectEnum]::ListWindows()
+  if ($all.Count -eq 0) { return $null }
+
+  $useDisplay = ($DispRight -gt $DispLeft -and $DispBottom -gt $DispTop)
+  $onDisplay = @($all | Where-Object {
+    Test-WindowOnDisplay -Rect $_ -DispLeft $DispLeft -DispTop $DispTop -DispRight $DispRight -DispBottom $DispBottom
+  })
+
+  if ($useDisplay) {
+    if ($onDisplay.Count -eq 0) { return $null }
+    $pool = $onDisplay
+  } else {
+    $pool = @($all)
   }
-  return $candidates | Select-Object -First 1
+
+  if ($Title) {
+    $found = @($pool | Where-Object { $_.Title -like "*$Title*" })
+    if ($found.Count -gt 0) {
+      return [PSCustomObject]@{ MainWindowHandle = $found[0].Hwnd; MainWindowTitle = $found[0].Title }
+    }
+  }
+
+  if ($pool.Count -gt 0) {
+    return [PSCustomObject]@{ MainWindowHandle = $pool[0].Hwnd; MainWindowTitle = $pool[0].Title }
+  }
+  return $null
 }
 
 function Get-ClickPoint {
@@ -114,9 +202,10 @@ function Click-TargetInput {
   Start-Sleep -Milliseconds 180
 }
 
-$target = Get-TargetCursor -Title $WindowTitle
+$target = Get-TargetCursor -Title $WindowTitle -DispLeft $DisplayLeft -DispTop $DisplayTop `
+  -DispRight $DisplayRight -DispBottom $DisplayBottom
 if (-not $target) {
-  Write-Error 'Cursor window not found'
+  Write-Error 'Cursor window not found on selected display'
   exit 1
 }
 

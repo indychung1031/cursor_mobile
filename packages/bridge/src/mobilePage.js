@@ -106,7 +106,7 @@ function renderMobileHtml() {
       <button id="send" type="button" class="primary">전송</button>
     </div>
     <div id="send-status"></div>
-    <p class="hint" style="padding:0 10px 8px;margin:0;">전송 시 PC 클립보드가 덮어씌워집니다. Cursor가 전면에 있어야 합니다.</p>
+    <p class="hint" style="padding:0 10px 8px;margin:0;">전송 시 PC 클립보드가 덮어씌워집니다. 선택한 <strong>모니터</strong>에 있는 Cursor 창으로 입력됩니다.</p>
   </div>
 
   <script>

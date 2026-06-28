@@ -11,7 +11,9 @@ async function listDisplays() {
     name: `모니터 ${index + 1}`,
     deviceId: d.name || String(d.id ?? index),
     left: d.left ?? 0,
+    top: d.top ?? 0,
     width: d.width,
+    height: d.height,
   }))
 }
 

@@ -1,6 +1,8 @@
 const path = require('path')
 const { execFileSync } = require('child_process')
 const clipboardy = require('clipboardy')
+const { listDisplays } = require('../capture')
+const { findDisplayBounds } = require('../displayBounds')
 
 const INJECT_PS1 = path.join(__dirname, '..', '..', 'scripts', 'inject.ps1')
 
@@ -36,6 +38,25 @@ async function injectMessage(text, config = {}) {
     )
   } else {
     args.push('-XRatio', '0.72', '-FromBottom', '38')
+  }
+
+  try {
+    const displays = await listDisplays()
+    const bounds = findDisplayBounds(displays, config.selectedDisplay)
+    if (bounds) {
+      args.push(
+        '-DisplayLeft',
+        String(bounds.left),
+        '-DisplayTop',
+        String(bounds.top),
+        '-DisplayRight',
+        String(bounds.right),
+        '-DisplayBottom',
+        String(bounds.bottom),
+      )
+    }
+  } catch {
+    /* inject without display filter */
   }
 
   try {
