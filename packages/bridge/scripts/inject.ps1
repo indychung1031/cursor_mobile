@@ -8,7 +8,9 @@ param(
   [int]$DisplayLeft = 0,
   [int]$DisplayTop = 0,
   [int]$DisplayRight = 0,
-  [int]$DisplayBottom = 0
+  [int]$DisplayBottom = 0,
+  [switch]$DryRun,
+  [switch]$FocusOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -210,11 +212,30 @@ if (-not $target) {
 }
 
 $hwnd = $target.MainWindowHandle
-[WinInput]::ActivateWindow($hwnd)
-Start-Sleep -Milliseconds 300
 
 $point = Get-ClickPoint -TargetHwnd $hwnd -Ratio $XRatio -BottomOffset $FromBottom `
   -AbsX $X -AbsY $Y -Absolute:$UseAbsolute.IsPresent
+
+if ($DryRun) {
+  $rect = New-Object WinRect
+  [void][WinInput]::GetWindowRect($hwnd, [ref]$rect)
+  @{
+    ok = $true
+    windowTitle = $target.MainWindowTitle
+    hwnd = $hwnd.ToInt64()
+    click = @{ x = $point.X; y = $point.Y }
+    windowRect = @{
+      left = $rect.Left; top = $rect.Top; right = $rect.Right; bottom = $rect.Bottom
+    }
+    displayFilter = @{
+      left = $DisplayLeft; top = $DisplayTop; right = $DisplayRight; bottom = $DisplayBottom
+    }
+  } | ConvertTo-Json -Compress
+  exit 0
+}
+
+[WinInput]::ActivateWindow($hwnd)
+Start-Sleep -Milliseconds 300
 
 Click-TargetInput -TargetHwnd $hwnd -Point $point
 
@@ -229,6 +250,10 @@ if ($fg -ne $hwnd) {
 if ($fg -ne $hwnd) {
   Write-Error 'Could not focus Cursor window'
   exit 1
+}
+
+if ($FocusOnly) {
+  exit 0
 }
 
 [System.Windows.Forms.SendKeys]::SendWait('^v')

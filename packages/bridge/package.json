@@ -13,7 +13,8 @@
     "test:setup-qr": "node scripts/test-setup-qr.js",
     "test:pair": "node scripts/test-pair.js",
     "test:mobile-a3": "node scripts/test-mobile-a3.js",
-    "test:setup-window": "node scripts/test-setup-window.js"
+    "test:setup-window": "node scripts/test-setup-window.js",
+    "test:focus-b1": "node scripts/test-focus-b1.js"
   },
   "engines": {
     "node": ">=18"

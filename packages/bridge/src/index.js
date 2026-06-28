@@ -17,7 +17,7 @@ const { renderDevHtml } = require('./devPage')
 const { listCursorWindows, listCursorWindowsDetailed } = require('./cursorWindows')
 const { findDisplayBounds, windowCenterOnDisplay } = require('./displayBounds')
 const { registerMjpegStream } = require('./stream/mjpeg')
-const { injectMessage } = require('./clipboard/inject')
+const { injectMessage, dryRunFocus } = require('./focus/focus')
 const { openSetupPage } = require('./openBrowser')
 const {
   generatePairingCode,
@@ -202,6 +202,17 @@ app.post('/message', { preHandler: requireAuth }, async (req, reply) => {
   } catch (err) {
     app.log.error({ err }, 'inject failed')
     return reply.code(500).send({ error: 'inject failed' })
+  }
+})
+
+app.post('/focus/dry-run', { preHandler: requireAuth }, async (req, reply) => {
+  const config = loadConfig()
+  try {
+    const result = await dryRunFocus(config)
+    return result
+  } catch (err) {
+    app.log.warn({ err }, 'focus dry-run failed')
+    return reply.code(500).send({ error: err.message || 'dry-run failed' })
   }
 })
 

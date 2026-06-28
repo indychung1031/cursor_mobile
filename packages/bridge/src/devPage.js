@@ -68,7 +68,13 @@ function renderDevHtml({ port }) {
   </div>
   <div id="stream-wrap"></div>
 
-  <h2>Slice B — 집중 <span class="tag planned">B2</span></h2>
+  <h2>Slice B — 집중 <span class="tag live">B1</span></h2>
+  <div class="row">
+    <button type="button" class="secondary" onclick="injectDryRun()">inject dry-run</button>
+  </div>
+  <pre id="focus-log">(대기 — 클릭·붙여넣기 없이 대상 창·좌표만 확인)</pre>
+
+  <h2>Slice B — 집중 준비 <span class="tag planned">B2</span></h2>
   <div class="row">
     <button type="button" disabled title="WP-B2 구현 후 활성화">POST /focus/prepare</button>
   </div>
@@ -153,6 +159,19 @@ function renderDevHtml({ port }) {
         const data = await res.json()
         log('msg-log', { status: res.status, ...data }, res.ok)
       } catch (e) { log('msg-log', e.message, false) }
+    }
+
+    async function injectDryRun() {
+      if (!token()) { log('focus-log', '먼저 pair → token 저장', false); return }
+      try {
+        const res = await fetch('/focus/dry-run', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: '{}',
+        })
+        const data = await res.json()
+        log('focus-log', { status: res.status, ...data }, res.ok)
+      } catch (e) { log('focus-log', e.message, false) }
     }
 
     function toggleStream() {
