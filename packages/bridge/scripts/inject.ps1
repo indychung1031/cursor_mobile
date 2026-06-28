@@ -11,7 +11,12 @@ param(
   [int]$DisplayBottom = 0,
   [switch]$DryRun,
   [switch]$FocusOnly,
-  [switch]$MinimizeOthers
+  [switch]$MinimizeOthers,
+  [switch]$ScrollOnly,
+  [int]$DeltaY = -240,
+  [ValidateSet('wheel', 'page', 'home', 'end')]
+  [string]$ScrollMode = 'wheel',
+  [double]$ScrollYRatio = 0.45
 )
 
 $ErrorActionPreference = 'Stop'
@@ -56,10 +61,14 @@ public class WinInput {
   public static extern IntPtr GetAncestor(IntPtr hWnd, uint gaFlags);
   public const int LEFTDOWN = 0x02;
   public const int LEFTUP = 0x04;
+  public const int WHEEL = 0x0800;
   public const uint GA_ROOT = 2;
   public static void LeftClick() {
     mouse_event(LEFTDOWN, 0, 0, 0, 0);
     mouse_event(LEFTUP, 0, 0, 0, 0);
+  }
+  public static void MouseWheelDelta(int delta) {
+    mouse_event(WHEEL, 0, 0, delta, 0);
   }
   public static void ActivateWindow(IntPtr hWnd) {
     if (hWnd == IntPtr.Zero) return;
@@ -193,6 +202,47 @@ function Get-ClickPoint {
   return [WinPoint]@{ X = $x; Y = $y }
 }
 
+function Get-ScrollPoint {
+  param($TargetHwnd, [double]$RatioX, [double]$RatioY)
+  $rect = New-Object WinRect
+  if (-not [WinInput]::GetWindowRect($TargetHwnd, [ref]$rect)) {
+    throw 'Failed to read Cursor window bounds'
+  }
+  $width = $rect.Right - $rect.Left
+  $height = $rect.Bottom - $rect.Top
+  if ($width -lt 100 -or $height -lt 100) {
+    throw 'Cursor window is too small'
+  }
+  $x = [int]($rect.Left + ($width * $RatioX))
+  $y = [int]($rect.Top + ($height * $RatioY))
+  return [WinPoint]@{ X = $x; Y = $y }
+}
+
+function Invoke-ScrollAtPoint {
+  param($TargetHwnd, $Point, [int]$DeltaY, [string]$Mode)
+  [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point($Point.X, $Point.Y)
+  Start-Sleep -Milliseconds 120
+  $under = [WinInput]::WindowFromPoint($Point)
+  if (-not [WinInput]::IsSameRootWindow($under, $TargetHwnd)) {
+    throw 'Scroll target is outside Cursor window'
+  }
+  [WinInput]::LeftClick()
+  Start-Sleep -Milliseconds 150
+  switch ($Mode) {
+    'page' {
+      if ($DeltaY -lt 0) {
+        [System.Windows.Forms.SendKeys]::SendWait('{PGUP}')
+      } else {
+        [System.Windows.Forms.SendKeys]::SendWait('{PGDN}')
+      }
+    }
+    'home' { [System.Windows.Forms.SendKeys]::SendWait('^{HOME}') }
+    'end' { [System.Windows.Forms.SendKeys]::SendWait('^{END}') }
+    default { [WinInput]::MouseWheelDelta($DeltaY) }
+  }
+  Start-Sleep -Milliseconds 80
+}
+
 function Click-TargetInput {
   param($TargetHwnd, $Point)
   [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point($Point.X, $Point.Y)
@@ -225,6 +275,14 @@ if (-not $target) {
 }
 
 $hwnd = $target.MainWindowHandle
+
+if ($ScrollOnly) {
+  $scrollPoint = Get-ScrollPoint -TargetHwnd $hwnd -RatioX $XRatio -RatioY $ScrollYRatio
+  [WinInput]::ActivateWindow($hwnd)
+  Start-Sleep -Milliseconds 300
+  Invoke-ScrollAtPoint -TargetHwnd $hwnd -Point $scrollPoint -DeltaY $DeltaY -Mode $ScrollMode
+  exit 0
+}
 
 $point = Get-ClickPoint -TargetHwnd $hwnd -Ratio $XRatio -BottomOffset $FromBottom `
   -AbsX $X -AbsY $Y -Absolute:$UseAbsolute.IsPresent

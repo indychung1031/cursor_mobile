@@ -63,6 +63,14 @@ async function buildInjectScriptArgs(config, mode = 'inject', options = {}) {
   await appendDisplayArgs(args, config)
   if (mode === 'dry-run') args.push('-DryRun')
   else if (mode === 'focus') args.push('-FocusOnly')
+  else if (mode === 'scroll') {
+    args.push('-ScrollOnly')
+    args.push('-DeltaY', String(options.deltaY ?? -240))
+    args.push('-ScrollMode', String(options.scrollMode || 'wheel'))
+    if (options.scrollYRatio != null) {
+      args.push('-ScrollYRatio', String(options.scrollYRatio))
+    }
+  }
   if (options.minimizeOthers) args.push('-MinimizeOthers')
   return args
 }
@@ -112,6 +120,7 @@ async function injectMessage(text, config = {}) {
 
 module.exports = {
   buildInjectScriptArgs,
+  runInjectScript,
   dryRunFocus,
   prepareFocus,
   focusWindow,

@@ -81,11 +81,12 @@ function renderDevHtml({ port }) {
   </div>
   <pre id="prepare-log">(Cursor 전면 + 입력창 클릭 — 붙여넣기 없음)</pre>
 
-  <h2>Slice C — 스크롤 <span class="tag planned">C1</span></h2>
+  <h2>Slice C — 스크롤 <span class="tag live">C1</span></h2>
   <div class="row">
-    <button type="button" disabled title="WP-C1 구현 후 활성화">scroll ↑</button>
-    <button type="button" disabled title="WP-C1 구현 후 활성화">scroll ↓</button>
+    <button type="button" onclick="sendScroll(-240)">scroll ↑</button>
+    <button type="button" class="secondary" onclick="sendScroll(240)">scroll ↓</button>
   </div>
+  <pre id="scroll-log">(Cursor Agent 패널 포커스 후 wheel — deltaY -240 = 위로)</pre>
 
   <h2>Slice D — 세션 <span class="tag planned">D1</span></h2>
   <div class="row">
@@ -187,6 +188,19 @@ function renderDevHtml({ port }) {
         const data = await res.json()
         log('prepare-log', { status: res.status, ...data }, res.ok)
       } catch (e) { log('prepare-log', e.message, false) }
+    }
+
+    async function sendScroll(deltaY) {
+      if (!token()) { log('scroll-log', '먼저 pair → token 저장', false); return }
+      try {
+        const res = await fetch('/scroll', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ deltaY, mode: 'wheel' }),
+        })
+        const data = await res.json()
+        log('scroll-log', { status: res.status, ...data }, res.ok)
+      } catch (e) { log('scroll-log', e.message, false) }
     }
 
     function toggleStream() {

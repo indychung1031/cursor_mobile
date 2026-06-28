@@ -16,7 +16,8 @@
     "test:setup-window": "node scripts/test-setup-window.js",
     "test:focus-b1": "node scripts/test-focus-b1.js",
     "test:focus-b2": "node scripts/test-focus-b2.js",
-    "test:mobile-b3": "node scripts/test-mobile-b3.js"
+    "test:mobile-b3": "node scripts/test-mobile-b3.js",
+    "test:scroll-c1": "node scripts/test-scroll-c1.js"
   },
   "engines": {
     "node": ">=18"

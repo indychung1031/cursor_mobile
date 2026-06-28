@@ -18,6 +18,7 @@ const { listCursorWindows, listCursorWindowsDetailed } = require('./cursorWindow
 const { findDisplayBounds, windowCenterOnDisplay } = require('./displayBounds')
 const { registerMjpegStream } = require('./stream/mjpeg')
 const { injectMessage, dryRunFocus, prepareFocus } = require('./focus/focus')
+const { injectScroll, SCROLL_MODES } = require('./scroll/scroll')
 const { openSetupPage } = require('./openBrowser')
 const {
   generatePairingCode,
@@ -224,6 +225,27 @@ app.post('/focus/prepare', { preHandler: requireAuth }, async (req, reply) => {
   } catch (err) {
     app.log.warn({ err, minimizeOthers }, 'focus prepare failed')
     return reply.code(500).send({ error: err.message || 'focus prepare failed' })
+  }
+})
+
+app.post('/scroll', { preHandler: requireAuth }, async (req, reply) => {
+  const rawDelta = req.body?.deltaY
+  const deltaY = typeof rawDelta === 'number' ? rawDelta : Number(rawDelta)
+  if (!Number.isFinite(deltaY)) {
+    return reply.code(400).send({ error: 'deltaY must be a number' })
+  }
+
+  const mode = String(req.body?.mode || 'wheel')
+  if (!SCROLL_MODES.has(mode)) {
+    return reply.code(400).send({ error: 'invalid mode' })
+  }
+
+  const config = loadConfig()
+  try {
+    return await injectScroll(deltaY, config, { mode })
+  } catch (err) {
+    app.log.warn({ err, deltaY, mode }, 'scroll inject failed')
+    return reply.code(500).send({ error: err.message || 'scroll failed' })
   }
 })
 
