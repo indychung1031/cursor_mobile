@@ -122,6 +122,28 @@ app.get('/displays', { preHandler: requireAuth }, async () => {
   return { displays }
 })
 
+app.get('/setup/windows', async () => {
+  const config = loadConfig()
+  return {
+    windows: listCursorWindows(),
+    targetWindowTitle: config.targetWindowTitle || '',
+  }
+})
+
+app.post('/config/window', async (req, reply) => {
+  const title = String(
+    req.body?.targetWindowTitle ?? req.body?.title ?? '',
+  ).trim()
+  if (!title) {
+    return reply.code(400).send({ error: 'empty targetWindowTitle' })
+  }
+  const config = loadConfig()
+  config.targetWindowTitle = title
+  saveConfig(config)
+  app.log.info({ targetWindowTitle: title }, 'config window updated')
+  return { ok: true, targetWindowTitle: title }
+})
+
 app.post('/config/display', { preHandler: requireAuth }, async (req) => {
   const config = loadConfig()
   const raw = req.body?.displayId

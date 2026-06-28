@@ -18,6 +18,41 @@ function qrSrc(connectUrl) {
   return `/setup/qr?url=${encodeURIComponent(connectUrl)}`
 }
 
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/"/g, '&quot;')
+}
+
+function escapeAttr(text) {
+  return escapeHtml(text).replace(/'/g, '&#39;')
+}
+
+function isWindowSelected(title, targetWindowTitle) {
+  if (!targetWindowTitle) return false
+  if (title === targetWindowTitle) return true
+  return title.includes(targetWindowTitle) || targetWindowTitle.includes(title)
+}
+
+function renderWindowPicker(cursorWindows, targetWindowTitle) {
+  const refreshBtn =
+    '<button type="button" class="window-refresh secondary" id="window-refresh">창 목록 새로고침</button>'
+
+  if (!cursorWindows.length) {
+    return `<p class="window-empty">(열린 Cursor 창 없음 — Cursor를 연 뒤 새로고침)</p>${refreshBtn}`
+  }
+
+  const items = cursorWindows
+    .map((title) => {
+      const selected = isWindowSelected(title, targetWindowTitle)
+      return `<button type="button" class="window-pick${selected ? ' selected' : ''}" data-title="${escapeAttr(title)}">${escapeHtml(title)}</button>`
+    })
+    .join('')
+
+  return `<div class="window-list" id="window-list">${items}</div>${refreshBtn}`
+}
+
 function renderSetupHtml({
   port,
   tailscaleIp,
@@ -38,13 +73,11 @@ function renderSetupHtml({
     { label: 'PC (이 페이지)', url: `http://localhost:${port}/setup` },
   ].filter(Boolean)
 
-  const windowList = cursorWindows.length
-    ? `<ul style="margin:8px 0;padding-left:18px;font-size:0.82rem;color:#ccc;">${cursorWindows.map((t) => `<li>${t.replace(/</g, '&lt;')}</li>`).join('')}</ul>`
-    : '<p style="font-size:0.82rem;color:#888;">(열린 Cursor 창 없음)</p>'
+  const windowPicker = renderWindowPicker(cursorWindows, targetWindowTitle)
 
   const targetHint = targetWindowTitle
-    ? `<code style="color:#6eb6ff">${targetWindowTitle.replace(/</g, '&lt;')}</code>`
-    : '<span style="color:#f87171">미설정 — config.json에 targetWindowTitle 추가</span>'
+    ? `<code id="target-window-display" style="color:#6eb6ff">${escapeHtml(targetWindowTitle)}</code>`
+    : '<span id="target-window-display" style="color:#f87171">미설정 — 아래에서 Cursor 창을 선택하세요</span>'
 
   const urlRows = urls
     .map(
@@ -97,7 +130,7 @@ function renderSetupHtml({
     }
     .card {
       background: #1a1a1a; border: 1px solid #333; border-radius: 16px;
-      padding: 32px; max-width: 520px; width: 100%;
+      padding: 32px; max-width: 560px; width: 100%;
     }
     h1 { margin: 0 0 8px; font-size: 1.25rem; }
     .sub { color: #888; font-size: 0.9rem; margin-bottom: 24px; line-height: 1.5; }
@@ -136,6 +169,22 @@ function renderSetupHtml({
     .qr-caption { font-size: 0.85rem; color: #ccc; margin-bottom: 6px; font-weight: 600; }
     .qr-link { font-size: 0.72rem; color: #6eb6ff; word-break: break-all; }
     .hint-block { font-size: 0.82rem; color: #888; margin-bottom: 16px; }
+    .window-list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+    .window-pick {
+      width: 100%; text-align: left; padding: 10px 12px; font-size: 0.82rem;
+      background: #222; color: #ddd; border: 1px solid #444; border-radius: 8px;
+      cursor: pointer; margin: 0; line-height: 1.35; word-break: break-word;
+    }
+    .window-pick:hover { border-color: #0066ff; color: #fff; }
+    .window-pick.selected {
+      border-color: #0066ff; background: #0a1a33; color: #6eb6ff; font-weight: 600;
+    }
+    .window-pick:disabled { opacity: 0.6; cursor: wait; }
+    .window-refresh { margin-top: 4px; }
+    .window-empty { font-size: 0.82rem; color: #888; margin: 8px 0; }
+    #window-status { font-size: 0.82rem; min-height: 1.2em; margin-top: 6px; }
+    #window-status.ok { color: #6ee7a0; }
+    #window-status.err { color: #f87171; }
   </style>
 </head>
 <body>
@@ -155,9 +204,10 @@ function renderSetupHtml({
 
     <div class="note">
       <strong>메시지 입력 대상 Cursor 창</strong><br>
-      config.json → <code>targetWindowTitle</code>: ${targetHint}<br>
-      (창 제목에 이 문자열이 포함된 Cursor로 입력됩니다)
-      ${windowList}
+      선택됨: <span id="target-window-wrap">${targetHint}</span><br>
+      <span style="color:#888;">모바일에서 보낸 메시지는 이 창의 Agent 입력창으로 갑니다.</span>
+      <div id="window-picker">${windowPicker}</div>
+      <div id="window-status"></div>
     </div>
 
     <div class="note">
@@ -223,6 +273,89 @@ function renderSetupHtml({
     }
 
     setInterval(refreshCode, 5000)
+
+    function setWindowStatus(msg, ok) {
+      const el = document.getElementById('window-status')
+      el.textContent = msg || ''
+      el.className = ok === true ? 'ok' : ok === false ? 'err' : ''
+    }
+
+    function renderTargetDisplay(title) {
+      const wrap = document.getElementById('target-window-wrap')
+      if (!wrap) return
+      if (title) {
+        wrap.innerHTML = '<code id="target-window-display" style="color:#6eb6ff"></code>'
+        document.getElementById('target-window-display').textContent = title
+      } else {
+        wrap.innerHTML = '<span id="target-window-display" style="color:#f87171">미설정 — 아래에서 Cursor 창을 선택하세요</span>'
+      }
+    }
+
+    function renderWindowList(windows, selected) {
+      const picker = document.getElementById('window-picker')
+      if (!picker) return
+      const refreshHtml = '<button type="button" class="window-refresh secondary" id="window-refresh">창 목록 새로고침</button>'
+      if (!windows.length) {
+        picker.innerHTML = '<p class="window-empty">(열린 Cursor 창 없음 — Cursor를 연 뒤 새로고침)</p>' + refreshHtml
+        return
+      }
+      const items = windows.map(function (title) {
+        const sel = selected && (title === selected || title.indexOf(selected) >= 0 || selected.indexOf(title) >= 0)
+        return '<button type="button" class="window-pick' + (sel ? ' selected' : '') + '" data-title="' + title.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;') + '">' + title.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</button>'
+      }).join('')
+      picker.innerHTML = '<div class="window-list" id="window-list">' + items + '</div>' + refreshHtml
+    }
+
+    async function selectWindow(title, btn) {
+      if (!title) return
+      if (btn) btn.disabled = true
+      setWindowStatus('저장 중…')
+      try {
+        const res = await fetch('/config/window', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetWindowTitle: title }),
+        })
+        const data = await res.json().catch(function () { return {} })
+        if (!res.ok) {
+          setWindowStatus(data.error || '저장 실패 (' + res.status + ')', false)
+          return
+        }
+        renderTargetDisplay(data.targetWindowTitle)
+        document.querySelectorAll('.window-pick').forEach(function (b) {
+          b.classList.toggle('selected', b.dataset.title === data.targetWindowTitle)
+        })
+        setWindowStatus('저장됨 — 이 창으로 메시지가 전송됩니다.', true)
+      } catch (_) {
+        setWindowStatus('Bridge에 연결할 수 없습니다.', false)
+      } finally {
+        if (btn) btn.disabled = false
+      }
+    }
+
+    async function refreshWindows() {
+      setWindowStatus('창 목록 불러오는 중…')
+      try {
+        const res = await fetch('/setup/windows')
+        const data = await res.json()
+        renderWindowList(data.windows || [], data.targetWindowTitle || '')
+        renderTargetDisplay(data.targetWindowTitle || '')
+        setWindowStatus('', null)
+      } catch (_) {
+        setWindowStatus('창 목록을 불러오지 못했습니다.', false)
+      }
+    }
+
+    document.addEventListener('click', function (e) {
+      const pick = e.target.closest('.window-pick')
+      if (pick) {
+        selectWindow(pick.dataset.title, pick)
+        return
+      }
+      if (e.target.id === 'window-refresh' || e.target.closest('#window-refresh')) {
+        refreshWindows()
+      }
+    })
   </script>
 </body>
 </html>`
