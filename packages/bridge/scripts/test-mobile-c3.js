@@ -9,6 +9,7 @@ const MARKERS = [
   'stream-freeze',
   'freezeStream',
   'resumeLiveStream',
+  'replaceStreamImg',
   'live-btn',
   'streamFrozen',
 ]

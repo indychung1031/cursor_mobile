@@ -111,7 +111,7 @@ function renderMobileHtml() {
       object-fit: contain; display: none;
     }
     #freeze-bar {
-      position: absolute; left: 10px; top: 10px; z-index: 3;
+      position: absolute; left: 10px; top: 10px; z-index: 4;
       display: none; align-items: center; gap: 8px;
     }
     #freeze-bar.visible { display: flex; }
@@ -121,8 +121,8 @@ function renderMobileHtml() {
       border: 1px solid rgba(251, 191, 36, 0.45);
     }
     #live-btn {
-      width: auto; min-width: 64px; margin: 0; padding: 6px 12px;
-      font-size: 0.8rem; border-radius: 999px;
+      width: auto; min-width: 64px; margin: 0; padding: 8px 14px;
+      font-size: 0.85rem; border-radius: 999px; touch-action: manipulation;
     }
     #input-area {
       display: flex; gap: 8px; padding: 10px; background: #1a1a1a;
@@ -352,10 +352,31 @@ function renderMobileHtml() {
       startSessionPoll()
     }
 
+    function replaceStreamImg() {
+      const wrap = document.getElementById('stream-wrap')
+      const old = document.getElementById('stream')
+      const img = document.createElement('img')
+      img.id = 'stream'
+      img.alt = 'Cursor Agent'
+      img.addEventListener('error', onStreamLost)
+      if (old) {
+        old.replaceWith(img)
+      } else {
+        wrap.insertBefore(img, wrap.firstChild)
+      }
+      return img
+    }
+
     function refreshStream() {
       if (streamFrozen) return
       setStatusDot('#fbbf24')
-      document.getElementById('stream').src =
+      let img = document.getElementById('stream')
+      // iOS Safari: src 제거 후 같은 img에 MJPEG 재연결 불가 → img 교체
+      if (!img || !img.getAttribute('src')) {
+        img = replaceStreamImg()
+      }
+      img.classList.remove('hidden')
+      img.src =
         '/stream?token=' + encodeURIComponent(getToken()) + '&t=' + Date.now()
     }
 
@@ -385,9 +406,9 @@ function renderMobileHtml() {
     function resumeLiveStream() {
       if (!streamFrozen) return
       streamFrozen = false
-      document.getElementById('stream').classList.remove('hidden')
       document.getElementById('stream-freeze').style.display = 'none'
       document.getElementById('freeze-bar').classList.remove('visible')
+      replaceStreamImg()
       refreshStream()
       hideStreamOverlay()
     }
@@ -724,9 +745,14 @@ function renderMobileHtml() {
       document.getElementById('health-btn').addEventListener('click', toggleHealthPanel)
       document.getElementById('scroll-up').addEventListener('click', () => sendScroll(-SCROLL_STEP))
       document.getElementById('scroll-down').addEventListener('click', () => sendScroll(SCROLL_STEP))
-      document.getElementById('live-btn').addEventListener('click', resumeLiveStream)
-      document.getElementById('stream').addEventListener('click', onStreamTap)
+      document.getElementById('live-btn').addEventListener('click', (e) => {
+        e.stopPropagation()
+        resumeLiveStream()
+      })
       const streamWrap = document.getElementById('stream-wrap')
+      streamWrap.addEventListener('click', (e) => {
+        if (e.target.id === 'stream') onStreamTap()
+      })
       streamWrap.addEventListener('touchstart', onStreamTouchStart, { passive: true })
       streamWrap.addEventListener('touchend', onStreamTouchEnd, { passive: true })
     }
