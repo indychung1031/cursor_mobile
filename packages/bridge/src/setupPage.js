@@ -80,6 +80,14 @@ function renderSetupHtml({
   const urls = [
     mobileUrl && { label: 'iPhone (Tailscale · 밖에서)', url: mobileUrl },
     lanUrl && { label: 'iPhone (같은 Wi‑Fi)', url: lanUrl },
+    chatEnabled && tailscaleIp && {
+      label: 'iPhone 채팅 C모드 (Tailscale)',
+      url: `http://${tailscaleIp}:${port}/chat`,
+    },
+    chatEnabled && lanIp && {
+      label: 'iPhone 채팅 C모드 (Wi‑Fi)',
+      url: `http://${lanIp}:${port}/chat`,
+    },
     { label: 'PC (이 페이지)', url: `http://localhost:${port}/setup` },
   ].filter(Boolean)
 
@@ -228,9 +236,10 @@ function renderSetupHtml({
 
     <div class="note">
       <strong>사용 방법</strong><br>
-      1. iPhone 카메라로 QR 스캔 → 자동 연결<br>
-      2. (수동) 위 6자리 코드 입력<br>
-      3. Claude 터미널 등 다른 창은 최소화해 두기
+      1. iPhone 카메라로 QR 스캔 → <strong>영상(B모드)</strong> 자동 연결<br>
+      2. <strong>텍스트 채팅</strong>은 Safari 주소창에 <code>/chat</code> 붙이거나 위 표의 C모드 URL<br>
+      3. (수동) 위 6자리 코드 입력<br>
+      4. Claude 터미널 등 다른 창은 최소화해 두기
     </div>
   </div>
   <script>

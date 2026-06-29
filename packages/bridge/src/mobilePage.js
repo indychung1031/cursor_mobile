@@ -47,6 +47,10 @@ function renderMobileHtml() {
       user-select: none;
     }
     #focus-toggle { width: auto; margin: 0; padding: 0; accent-color: #0066ff; }
+    .toolbar-link {
+      font-size: 0.75rem; color: #6eb6ff; text-decoration: none; flex-shrink: 0;
+      padding: 4px 8px; border: 1px solid #444; border-radius: 6px; white-space: nowrap;
+    }
     #status-dot {
       width: 10px; height: 10px; border-radius: 50%; background: #6ee7a0; flex-shrink: 0;
       cursor: pointer;
@@ -168,6 +172,7 @@ function renderMobileHtml() {
         <input type="checkbox" id="focus-toggle" aria-label="집중 모드" />
         집중
       </label>
+      <a class="toolbar-link" href="/chat" title="텍스트 채팅 (C모드)">채팅</a>
     </div>
     <div id="health-panel" class="hidden" aria-live="polite">
       <h2>연결 상태</h2>
