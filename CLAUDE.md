@@ -7,7 +7,7 @@
 | **Git Root** | `c:/Users/indyc/Desktop/antigravity/project/cursor_mobile` |
 | **Remote** | `https://github.com/indychung1031/cursor_mobile.git` |
 | **Branch** | `main` |
-| **문서** | `Docs/` (기획서, ux_expansion_plan, wp_verify_runbook 등) |
+| **문서** | `Docs/` ([known_risks.md](Docs/known_risks.md), 기획서, wp_verify_runbook 등) |
 | **Bridge** | `packages/bridge/` — Node.js Fastify, B-mode MJPEG + inject |
 
 ---

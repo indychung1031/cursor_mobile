@@ -9,6 +9,8 @@
 | [기획서.md](기획서.md) | 제품 기획서 (§9 체크리스트, §11 iPhone 앱 vs Safari) |
 | [ux_expansion_plan.md](ux_expansion_plan.md) | **사용성 확장 v1.4** — Phase 1.5 MVP 확정 |
 | [wp_verify_runbook.md](wp_verify_runbook.md) | **WP별 검증** — PC `/dev` + iPhone |
+| [known_risks.md](known_risks.md) | **알려진 한계·문제 가능성** — 실사용 리스크·대응 (Living Doc) |
+| [c_mode_development.md](c_mode_development.md) | C모드(DB 텍스트) 분리 개발 |
 | [spike_phaseA_checklist.md](spike_phaseA_checklist.md) | A-mode 스파이크 (MVP Go 후) |
 | [implementation_plan.md](implementation_plan.md) | 구현 계획서 (API, 코드 스니펫) |
 | [phase0_runbook.md](phase0_runbook.md) | Phase 0 실행 가이드 |
