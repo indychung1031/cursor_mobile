@@ -115,6 +115,18 @@ function renderChatHtml() {
     let sse = null
     let messageCache = []
     let lastCreatedAt = null
+    let sendInFlight = false
+    const API_TIMEOUT_MS = 25000
+
+    async function fetchApi(url, opts) {
+      const ac = new AbortController()
+      const timer = setTimeout(() => ac.abort(), API_TIMEOUT_MS)
+      try {
+        return await fetch(url, { ...opts, signal: ac.signal })
+      } finally {
+        clearTimeout(timer)
+      }
+    }
 
     const getToken = () => localStorage.getItem('cm_token') || ''
     const headers = (json) => {
@@ -381,34 +393,21 @@ function renderChatHtml() {
 
     async function sendMsg() {
       const text = document.getElementById('msg').value.trim()
-      if (!text) return
+      if (!text || sendInFlight) return
       const status = document.getElementById('send-status')
       const btn = document.getElementById('send')
       status.className = ''
       status.textContent = '전송 중…'
       btn.disabled = true
+      sendInFlight = true
       try {
-        if (isFocusModeOn()) {
-          const prep = await fetch('/focus/prepare', {
-            method: 'POST',
-            headers: headers(true),
-            body: JSON.stringify({ minimizeOthers: false }),
-          })
-          if (prep.status === 401) {
-            handleUnauthorized()
-            return
-          }
-          if (!prep.ok) {
-            const prepData = await prep.json().catch(() => ({}))
-            status.className = 'err'
-            status.textContent = prepData.error || '집중 준비 실패'
-            return
-          }
-        }
-        const res = await fetch('/message', {
+        const res = await fetchApi('/message', {
           method: 'POST',
           headers: headers(true),
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({
+            text,
+            minimizeOthers: isFocusModeOn(),
+          }),
         })
         const data = await res.json().catch(() => ({}))
         if (res.ok) {
@@ -422,11 +421,14 @@ function renderChatHtml() {
           status.className = 'err'
           status.textContent = data.error || '전송 실패'
         }
-      } catch (_) {
+      } catch (err) {
         status.className = 'err'
-        status.textContent = '네트워크 오류'
+        status.textContent = err && err.name === 'AbortError'
+          ? '전송 시간 초과 — PC 팝업을 닫고 다시 시도하세요.'
+          : '네트워크 오류'
       } finally {
         btn.disabled = false
+        sendInFlight = false
       }
     }
 

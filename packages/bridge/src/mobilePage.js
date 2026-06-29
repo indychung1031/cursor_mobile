@@ -233,6 +233,18 @@ function renderMobileHtml() {
     let healthPollTimer = null
     const MAX_STREAM_AUTO_RETRIES = 2
     let sessionPollTimer = null
+    let sendInFlight = false
+    const API_TIMEOUT_MS = 25000
+
+    async function fetchApi(url, opts) {
+      const ac = new AbortController()
+      const timer = setTimeout(() => ac.abort(), API_TIMEOUT_MS)
+      try {
+        return await fetch(url, { ...opts, signal: ac.signal })
+      } finally {
+        clearTimeout(timer)
+      }
+    }
 
     function setStatusDot(color) {
       document.getElementById('status-dot').style.background = color
@@ -648,34 +660,21 @@ function renderMobileHtml() {
 
     async function sendMsg() {
       const text = document.getElementById('msg').value.trim()
-      if (!text) return
+      if (!text || sendInFlight) return
       const btn = document.getElementById('send')
       const status = document.getElementById('send-status')
       status.className = ''
       status.textContent = '전송 중…'
       btn.disabled = true
+      sendInFlight = true
       try {
-        if (isFocusModeOn()) {
-          const prep = await fetch('/focus/prepare', {
-            method: 'POST',
-            headers: headers(true),
-            body: JSON.stringify({ minimizeOthers: false }),
-          })
-          if (prep.status === 401) {
-            handleUnauthorized('인증이 만료되었습니다. PC /setup에서 다시 연결하세요.')
-            return
-          }
-          if (!prep.ok) {
-            const prepData = await prep.json().catch(() => ({}))
-            status.className = 'err'
-            status.textContent = prepData.error || ('집중 준비 실패 (' + prep.status + ')')
-            return
-          }
-        }
-        const res = await fetch('/message', {
+        const res = await fetchApi('/message', {
           method: 'POST',
           headers: headers(true),
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({
+            text,
+            minimizeOthers: isFocusModeOn(),
+          }),
         })
         const data = await res.json().catch(() => ({}))
         if (res.ok) {
@@ -689,11 +688,14 @@ function renderMobileHtml() {
           status.className = 'err'
           status.textContent = data.error || ('전송 실패 (' + res.status + ')')
         }
-      } catch (_) {
+      } catch (err) {
         status.className = 'err'
-        status.textContent = '네트워크 오류 — Bridge 실행·Tailscale을 확인하세요.'
+        status.textContent = err && err.name === 'AbortError'
+          ? '전송 시간 초과 — PC 팝업(카카오톡 등)을 닫고 다시 시도하세요.'
+          : '네트워크 오류 — Bridge 실행·Tailscale을 확인하세요.'
       } finally {
         btn.disabled = false
+        sendInFlight = false
       }
     }
 

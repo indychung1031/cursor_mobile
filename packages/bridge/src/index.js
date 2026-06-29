@@ -205,8 +205,10 @@ app.post('/message', { preHandler: requireAuth }, async (req, reply) => {
     return reply.code(503).send({ error: 'inputOffset not configured in config.json' })
   }
 
+  const minimizeOthers = req.body?.minimizeOthers === true
+
   try {
-    await injectMessage(text, config)
+    await injectMessage(text, config, { minimizeOthers })
     clearInjectError()
     return { ok: true }
   } catch (err) {

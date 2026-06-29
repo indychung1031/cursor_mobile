@@ -3,8 +3,20 @@ const { execFileSync } = require('child_process')
 const clipboardy = require('clipboardy')
 const { listDisplays } = require('../capture')
 const { findDisplayBounds } = require('../displayBounds')
+const { withInjectLock } = require('./injectLock')
 
 const INJECT_PS1 = path.join(__dirname, '..', '..', 'scripts', 'inject.ps1')
+const INJECT_TIMEOUT_MS = Number(process.env.INJECT_TIMEOUT_MS || 20000)
+const DISPLAY_LIST_TIMEOUT_MS = Number(process.env.DISPLAY_LIST_TIMEOUT_MS || 5000)
+
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    }),
+  ])
+}
 
 function appendWindowArgs(args, config) {
   if (config.targetWindowTitle) {
@@ -31,7 +43,11 @@ function appendInputArgs(args, config) {
 
 async function appendDisplayArgs(args, config) {
   try {
-    const displays = await listDisplays()
+    const displays = await withTimeout(
+      listDisplays(),
+      DISPLAY_LIST_TIMEOUT_MS,
+      'listDisplays',
+    )
     const bounds = findDisplayBounds(displays, config.selectedDisplay)
     if (bounds) {
       args.push(
@@ -81,8 +97,9 @@ function runInjectScript(args) {
   }
   const stdout = execFileSync('powershell', args, {
     windowsHide: true,
-    timeout: 15000,
+    timeout: INJECT_TIMEOUT_MS,
     encoding: 'utf8',
+    killSignal: 'SIGTERM',
   })
   return stdout.trim()
 }
@@ -98,11 +115,15 @@ async function dryRunFocus(config = {}) {
 }
 
 /** Activate Cursor window and click the Agent input field. */
-async function prepareFocus(config = {}, options = {}) {
+async function runPrepareFocus(config = {}, options = {}) {
   const minimizeOthers = options.minimizeOthers === true
   const args = await buildInjectScriptArgs(config, 'focus', { minimizeOthers })
   runInjectScript(args)
   return { ok: true, minimizeOthers }
+}
+
+async function prepareFocus(config = {}, options = {}) {
+  return withInjectLock(() => runPrepareFocus(config, options))
 }
 
 /** @deprecated alias — use prepareFocus */
@@ -111,11 +132,22 @@ async function focusWindow(config = {}) {
 }
 
 /** Write clipboard + focus + paste + Enter (Phase 1 message inject). */
-async function injectMessage(text, config = {}) {
-  await clipboardy.write(text)
-  const args = await buildInjectScriptArgs(config, 'inject')
-  runInjectScript(args)
-  return { ok: true }
+async function injectMessage(text, config = {}, options = {}) {
+  return withInjectLock(async () => {
+    await clipboardy.write(text)
+    const minimizeOthers = options.minimizeOthers === true
+    try {
+      await runPrepareFocus(config, { minimizeOthers })
+    } catch (err) {
+      const msg = String(err.message || err)
+      if (!msg.includes('focus Cursor') && !msg.includes('covering')) {
+        throw err
+      }
+    }
+    const args = await buildInjectScriptArgs(config, 'inject')
+    runInjectScript(args)
+    return { ok: true }
+  })
 }
 
 module.exports = {
@@ -125,4 +157,6 @@ module.exports = {
   prepareFocus,
   focusWindow,
   injectMessage,
+  withInjectLock,
+  INJECT_TIMEOUT_MS,
 }

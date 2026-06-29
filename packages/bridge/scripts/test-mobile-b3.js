@@ -12,8 +12,9 @@ const base = `http://127.0.0.1:${port}`
 const MARKERS = [
   'focus-toggle',
   'cm_focus_mode',
-  '/focus/prepare',
-  'minimizeOthers: false',
+  'minimizeOthers: isFocusModeOn()',
+  'fetchApi',
+  'API_TIMEOUT_MS',
 ]
 
 async function pairToken() {

@@ -310,20 +310,31 @@ if ($MinimizeOthers) {
   Start-Sleep -Milliseconds 150
 }
 
-[WinInput]::ActivateWindow($hwnd)
-Start-Sleep -Milliseconds 300
-
-Click-TargetInput -TargetHwnd $hwnd -Point $point
-
-$fg = [WinInput]::GetForegroundWindow()
-if ($fg -ne $hwnd) {
+$focused = $false
+$maxAttempts = 4
+for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
   [WinInput]::ActivateWindow($hwnd)
-  Start-Sleep -Milliseconds 250
-  Click-TargetInput -TargetHwnd $hwnd -Point $point
+  Start-Sleep -Milliseconds 350
+  try {
+    Click-TargetInput -TargetHwnd $hwnd -Point $point
+  } catch {
+    if ($attempt -ge $maxAttempts) { throw }
+    Start-Sleep -Milliseconds 450
+    continue
+  }
   $fg = [WinInput]::GetForegroundWindow()
+  if ($fg -eq $hwnd) {
+    $focused = $true
+    break
+  }
+  if ($attempt -ge $maxAttempts) {
+    Write-Error 'Could not focus Cursor window (another app may be covering it — close popup and retry)'
+    exit 1
+  }
+  Start-Sleep -Milliseconds 400
 }
 
-if ($fg -ne $hwnd) {
+if (-not $focused) {
   Write-Error 'Could not focus Cursor window'
   exit 1
 }

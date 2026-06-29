@@ -1,4 +1,4 @@
-const { buildInjectScriptArgs, runInjectScript } = require('../focus/focus')
+const { buildInjectScriptArgs, runInjectScript, withInjectLock } = require('../focus/focus')
 
 const SCROLL_MODES = new Set(['wheel', 'page', 'home', 'end'])
 
@@ -9,17 +9,19 @@ const SCROLL_MODES = new Set(['wheel', 'page', 'home', 'end'])
  * @param {{ mode?: string, scrollYRatio?: number }} options
  */
 async function injectScroll(deltaY, config = {}, options = {}) {
-  const mode = String(options.mode || 'wheel')
-  if (!SCROLL_MODES.has(mode)) {
-    throw new Error(`invalid scroll mode: ${mode}`)
-  }
-  const args = await buildInjectScriptArgs(config, 'scroll', {
-    deltaY,
-    scrollMode: mode,
-    scrollYRatio: options.scrollYRatio,
+  return withInjectLock(async () => {
+    const mode = String(options.mode || 'wheel')
+    if (!SCROLL_MODES.has(mode)) {
+      throw new Error(`invalid scroll mode: ${mode}`)
+    }
+    const args = await buildInjectScriptArgs(config, 'scroll', {
+      deltaY,
+      scrollMode: mode,
+      scrollYRatio: options.scrollYRatio,
+    })
+    runInjectScript(args)
+    return { ok: true, deltaY, mode }
   })
-  runInjectScript(args)
-  return { ok: true, deltaY, mode }
 }
 
 module.exports = { injectScroll, SCROLL_MODES }
