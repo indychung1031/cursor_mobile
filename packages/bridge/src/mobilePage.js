@@ -83,6 +83,14 @@ function renderMobileHtml() {
       justify-content: center; background: #0a0a0a; overflow: hidden;
       position: relative; touch-action: pan-x pinch-zoom;
     }
+    #stream-wrap.stream-loading #status-dot { background: #fbbf24 !important; }
+    #stream-sync {
+      position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+      z-index: 2; font-size: 0.72rem; padding: 4px 10px; border-radius: 999px;
+      background: rgba(0,0,0,0.55); color: #fbbf24; display: none;
+      pointer-events: none;
+    }
+    #stream-sync.visible { display: block; }
     #scroll-controls {
       position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
       display: flex; flex-direction: column; gap: 8px; z-index: 2;
@@ -174,6 +182,7 @@ function renderMobileHtml() {
     </div>
     <div id="stream-wrap">
       <img id="stream" alt="Cursor Agent">
+      <div id="stream-sync" aria-live="polite">동기화 중…</div>
       <canvas id="stream-freeze" aria-hidden="true"></canvas>
       <div id="freeze-bar">
         <span id="freeze-badge">멈춤</span>
@@ -359,6 +368,7 @@ function renderMobileHtml() {
       img.id = 'stream'
       img.alt = 'Cursor Agent'
       img.addEventListener('error', onStreamLost)
+      img.addEventListener('load', onStreamFrame)
       if (old) {
         old.replaceWith(img)
       } else {
@@ -367,11 +377,23 @@ function renderMobileHtml() {
       return img
     }
 
+    function setStreamSync(visible) {
+      document.getElementById('stream-sync').classList.toggle('visible', !!visible)
+      document.getElementById('stream-wrap').classList.toggle('stream-loading', !!visible)
+    }
+
+    function onStreamFrame() {
+      if (streamFrozen) return
+      setStreamSync(false)
+      hideStreamOverlay()
+      setStatusDot('#6ee7a0')
+    }
+
     function refreshStream() {
       if (streamFrozen) return
       setStatusDot('#fbbf24')
+      setStreamSync(true)
       let img = document.getElementById('stream')
-      // iOS Safari: src 제거 후 같은 img에 MJPEG 재연결 불가 → img 교체
       if (!img || !img.getAttribute('src')) {
         img = replaceStreamImg()
       }
@@ -460,6 +482,8 @@ function renderMobileHtml() {
     }
 
     async function onStreamLost() {
+      if (streamFrozen) return
+      setStreamSync(true)
       if (!getToken()) {
         showPairScreen('연결이 끊겼습니다. PC /setup에서 다시 연결하세요.')
         return
@@ -750,6 +774,11 @@ function renderMobileHtml() {
         resumeLiveStream()
       })
       const streamWrap = document.getElementById('stream-wrap')
+      const initialStream = document.getElementById('stream')
+      if (initialStream) {
+        initialStream.addEventListener('error', onStreamLost)
+        initialStream.addEventListener('load', onStreamFrame)
+      }
       streamWrap.addEventListener('click', (e) => {
         if (e.target.id === 'stream') onStreamTap()
       })

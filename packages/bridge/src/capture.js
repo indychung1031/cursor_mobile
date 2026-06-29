@@ -17,14 +17,32 @@ async function listDisplays() {
   }))
 }
 
-async function captureRegion(config) {
+async function captureRegion(config, options = {}) {
   const { selectedDisplay = 0, region, jpegQuality = 75 } = config
   const imgBuffer = await screenshot({ screen: selectedDisplay, format: 'png' })
   const image = await Jimp.read(imgBuffer)
 
   const { x, y, width, height } = region
-  const cropped = image.crop(x, y, width, height).quality(jpegQuality)
-  return cropped.getBufferAsync(Jimp.MIME_JPEG)
+  let cropped = image.crop(x, y, width, height)
+
+  let scale = options.scale
+  if (scale == null && options.forStream) {
+    scale = config.streamScale ?? 0.85
+  }
+  if (scale > 0 && scale < 1) {
+    cropped = cropped.resize(
+      Math.max(1, Math.round(width * scale)),
+      Math.max(1, Math.round(height * scale)),
+    )
+  }
+
+  let quality = jpegQuality
+  if (options.forStream) {
+    const streamQ = config.streamJpegQuality
+    quality = streamQ != null ? streamQ : Math.min(jpegQuality, 72)
+  }
+
+  return cropped.quality(quality).getBufferAsync(Jimp.MIME_JPEG)
 }
 
 async function captureRegionToFile(config, outputPath) {

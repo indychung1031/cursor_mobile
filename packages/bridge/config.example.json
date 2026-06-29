@@ -11,5 +11,7 @@
     "fromBottom": 38
   },
   "targetWindowTitle": "cursor_mobile",
-  "jpegQuality": 75
+  "jpegQuality": 75,
+  "streamJpegQuality": 68,
+  "streamScale": 0.85
 }

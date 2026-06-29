@@ -3,7 +3,7 @@ const {
   getLastInjectError,
 } = require('./bridgeState')
 
-const STREAM_TARGET_FPS = 5
+const STREAM_TARGET_FPS = Math.round(1000 / Number(process.env.STREAM_SEND_MS || 120))
 
 function getHealthPayload(deps) {
   const { port, isCursorRunning, getTailscaleIp, getBridgeUrls } = deps
