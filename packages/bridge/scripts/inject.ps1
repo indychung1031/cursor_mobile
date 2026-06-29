@@ -343,6 +343,28 @@ if ($FocusOnly) {
   exit 0
 }
 
-[System.Windows.Forms.SendKeys]::SendWait('^v')
-Start-Sleep -Milliseconds 80
-[System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+function Send-PasteEnterToCursor {
+  param([IntPtr]$TargetHwnd)
+  $maxWait = 8
+  for ($w = 1; $w -le $maxWait; $w++) {
+    [WinInput]::ActivateWindow($TargetHwnd)
+    Start-Sleep -Milliseconds 220
+    $fg = [WinInput]::GetForegroundWindow()
+    if ($fg -eq $TargetHwnd) {
+      [System.Windows.Forms.SendKeys]::SendWait('^v')
+      Start-Sleep -Milliseconds 80
+      $fg2 = [WinInput]::GetForegroundWindow()
+      if ($fg2 -eq $TargetHwnd) {
+        [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+        return
+      }
+      Write-Error 'Cursor lost focus during paste (KakaoTalk/notification?) — retry'
+      exit 1
+    }
+    Start-Sleep -Milliseconds 400
+  }
+  Write-Error 'Cursor not focused before paste — close popup and retry'
+  exit 1
+}
+
+Send-PasteEnterToCursor -TargetHwnd $hwnd

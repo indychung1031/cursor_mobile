@@ -136,15 +136,7 @@ async function injectMessage(text, config = {}, options = {}) {
   return withInjectLock(async () => {
     await clipboardy.write(text)
     const minimizeOthers = options.minimizeOthers === true
-    try {
-      await runPrepareFocus(config, { minimizeOthers })
-    } catch (err) {
-      const msg = String(err.message || err)
-      if (!msg.includes('focus Cursor') && !msg.includes('covering')) {
-        throw err
-      }
-    }
-    const args = await buildInjectScriptArgs(config, 'inject')
+    const args = await buildInjectScriptArgs(config, 'inject', { minimizeOthers })
     runInjectScript(args)
     return { ok: true }
   })
