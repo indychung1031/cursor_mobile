@@ -13,28 +13,27 @@ async function main() {
   if (!health.dbExists) {
     throw new Error('state.vscdb not found — start Cursor on this PC first')
   }
+  if (health.dbPath) {
+    throw new Error('getChatHealth should not expose dbPath')
+  }
 
-  const sessions = listComposers()
+  const sessions = listComposers({ limit: 5 })
   console.log('sessions:', sessions.length)
   if (!sessions.length) {
     throw new Error('no composer sessions in DB')
   }
-  sessions.slice(0, 5).forEach((s) => {
+  sessions.forEach((s) => {
     console.log(' -', s.composerId.slice(0, 8) + '…', s.name)
   })
 
   const pick = sessions[0]
-  const messages = listMessages(pick.composerId)
-  console.log('messages in first session:', messages.length)
-  if (messages.length < 1) {
-    throw new Error('expected at least 1 message in first session')
-  }
-  const sample = messages[messages.length - 1]
-  console.log('last message:', {
-    role: sample.role,
-    textLen: sample.text.length,
-    preview: sample.text.slice(0, 80).replace(/\s+/g, ' '),
-  })
+  const all = listMessages(pick.composerId, { tail: 100 })
+  const empty = all.filter((m) => !m.text.trim()).length
+  if (empty > 0) throw new Error('empty text messages should be filtered')
+
+  const tail = listMessages(pick.composerId, { tail: 10 })
+  console.log('tail=10:', tail.length)
+  if (tail.length > 10) throw new Error('tail limit failed')
 
   console.log('C-mode chat spike passed')
 }

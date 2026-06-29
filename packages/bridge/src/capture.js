@@ -23,7 +23,13 @@ async function captureRegion(config, options = {}) {
   const image = await Jimp.read(imgBuffer)
 
   const { x, y, width, height } = region
-  let cropped = image.crop(x, y, width, height)
+  const imgW = image.bitmap.width
+  const imgH = image.bitmap.height
+  const safeX = Math.max(0, Math.min(x, imgW - 1))
+  const safeY = Math.max(0, Math.min(y, imgH - 1))
+  const safeW = Math.max(1, Math.min(width, imgW - safeX))
+  const safeH = Math.max(1, Math.min(height, imgH - safeY))
+  let cropped = image.crop(safeX, safeY, safeW, safeH)
 
   let scale = options.scale
   if (scale == null && options.forStream) {
@@ -31,8 +37,8 @@ async function captureRegion(config, options = {}) {
   }
   if (scale > 0 && scale < 1) {
     cropped = cropped.resize(
-      Math.max(1, Math.round(width * scale)),
-      Math.max(1, Math.round(height * scale)),
+      Math.max(1, Math.round(safeW * scale)),
+      Math.max(1, Math.round(safeH * scale)),
     )
   }
 

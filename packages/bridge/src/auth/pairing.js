@@ -23,6 +23,22 @@ function loadSecret() {
 }
 
 const SECRET = loadSecret()
+const COOKIE_NAME = 'cm_token'
+const COOKIE_MAX_AGE_SEC = 30 * 24 * 60 * 60
+
+function setAuthCookie(reply, token) {
+  reply.setCookie(COOKIE_NAME, token, {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: COOKIE_MAX_AGE_SEC,
+    secure: false,
+  })
+}
+
+function clearAuthCookie(reply) {
+  reply.clearCookie(COOKIE_NAME, { path: '/' })
+}
 
 function generatePairingCode() {
   pairingCode = Math.floor(100000 + Math.random() * 900000).toString()
@@ -64,6 +80,9 @@ function extractToken(request) {
   if (auth?.startsWith('Bearer ')) {
     return auth.slice(7)
   }
+  if (request.cookies?.[COOKIE_NAME]) {
+    return request.cookies[COOKIE_NAME]
+  }
   return request.query?.token || null
 }
 
@@ -83,4 +102,7 @@ module.exports = {
   verifyToken,
   extractToken,
   requireAuth,
+  setAuthCookie,
+  clearAuthCookie,
+  COOKIE_NAME,
 }

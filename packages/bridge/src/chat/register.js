@@ -1,8 +1,11 @@
 const { registerChatRoutes } = require('./routes')
 const { renderChatHtml } = require('./chatPage')
+const { startWalWatch, registerChatEvents } = require('./walWatch')
 
 function registerChatMode(app, requireAuth, sendHtml) {
   registerChatRoutes(app, requireAuth)
+  registerChatEvents(app, requireAuth)
+  startWalWatch(app)
 
   app.get('/chat', async (_req, reply) => sendHtml(reply, renderChatHtml()))
 
@@ -11,11 +14,12 @@ function registerChatMode(app, requireAuth, sendHtml) {
     if (!code) {
       return reply.redirect('/chat?pair_error=missing')
     }
-    const { verifyPairingCode, signToken } = require('../auth/pairing')
+    const { verifyPairingCode, signToken, setAuthCookie } = require('../auth/pairing')
     if (!verifyPairingCode(code)) {
       return reply.redirect('/chat?pair_error=invalid')
     }
     const token = signToken()
+    setAuthCookie(reply, token)
     return reply.redirect(`/chat?cm_token=${encodeURIComponent(token)}`)
   })
 }

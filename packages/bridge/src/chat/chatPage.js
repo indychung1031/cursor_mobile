@@ -33,13 +33,22 @@ function renderChatHtml() {
     button:disabled { opacity: 0.5; }
     #toolbar {
       display: flex; gap: 8px; padding: 8px 10px; background: #111;
-      align-items: center; flex-shrink: 0; border-bottom: 1px solid #222;
+      align-items: center; flex-shrink: 0; border-bottom: 1px solid #222; flex-wrap: wrap;
     }
-    #toolbar h1 { margin: 0; font-size: 0.9rem; flex: 1; }
-    #session-select { flex: 1; margin: 0; min-width: 0; font-size: 15px; }
+    #session-select { flex: 1; margin: 0; min-width: 120px; font-size: 15px; }
     #mode-badge {
       font-size: 0.65rem; padding: 2px 6px; border-radius: 4px;
       background: #1e3a5f; color: #93c5fd; flex-shrink: 0;
+    }
+    #focus-wrap {
+      display: flex; align-items: center; gap: 4px; font-size: 0.75rem;
+      color: #aaa; white-space: nowrap; flex-shrink: 0;
+    }
+    #focus-wrap input { width: auto; margin: 0; padding: 0; accent-color: #0066ff; }
+    #inject-banner {
+      padding: 8px 12px; font-size: 0.75rem; line-height: 1.45;
+      background: #1f1a0a; color: #fbbf24; border-bottom: 1px solid #333;
+      flex-shrink: 0;
     }
     #messages {
       flex: 1; overflow-y: auto; padding: 12px; display: flex;
@@ -65,6 +74,9 @@ function renderChatHtml() {
     .err { color: #f87171; font-size: 0.85rem; min-height: 1.2em; }
     .ok { color: #6ee7a0; font-size: 0.85rem; }
     .hidden { display: none !important; }
+    .toolbar-link {
+      font-size: 0.72rem; color: #6eb6ff; text-decoration: none; flex-shrink: 0;
+    }
   </style>
 </head>
 <body>
@@ -81,9 +93,12 @@ function renderChatHtml() {
     <div id="toolbar">
       <span id="mode-badge">C</span>
       <select id="session-select"><option value="">세션 불러오는 중…</option></select>
+      <label id="focus-wrap"><input type="checkbox" id="focus-toggle"> 집중</label>
+      <a class="toolbar-link" href="/">B</a>
     </div>
+    <div id="inject-banner">PC Cursor에서 선택한 Agent 세션과 동일하게 맞춘 뒤 전송하세요.</div>
     <div id="messages"></div>
-    <div id="status-bar">폴링 대기</div>
+    <div id="status-bar">대기</div>
     <div id="input-row">
       <textarea id="msg" rows="1" placeholder="Cursor Agent에 보낼 메시지"></textarea>
       <button type="button" class="primary" id="send">전송</button>
@@ -92,8 +107,14 @@ function renderChatHtml() {
   </div>
   <script>
     const SESSION_KEY = 'cm_chat_composerId'
-    const POLL_MS = 2500
+    const FOCUS_KEY = 'cm_focus_mode'
+    const POLL_MS = 8000
+    const MAX_CACHE = 200
     let pollTimer = null
+    let sessionPollTimer = null
+    let sse = null
+    let messageCache = []
+    let lastCreatedAt = null
 
     const getToken = () => localStorage.getItem('cm_token') || ''
     const headers = (json) => {
@@ -102,16 +123,35 @@ function renderChatHtml() {
       return h
     }
 
+    function isFocusModeOn() {
+      return document.getElementById('focus-toggle').checked
+    }
+
+    function loadFocusMode() {
+      document.getElementById('focus-toggle').checked = localStorage.getItem(FOCUS_KEY) === '1'
+    }
+
+    function saveFocusMode() {
+      localStorage.setItem(FOCUS_KEY, isFocusModeOn() ? '1' : '0')
+    }
+
     function showPair() {
       document.getElementById('pair-screen').classList.remove('hidden')
       document.getElementById('app').classList.add('hidden')
       stopPoll()
+      stopSse()
+      stopSessionPoll()
     }
 
     function showApp() {
       document.getElementById('pair-screen').classList.add('hidden')
       document.getElementById('app').classList.remove('hidden')
-      loadSessions().then(startPoll)
+      loadFocusMode()
+      loadSessions().then(function () {
+        startPoll()
+        startSse()
+        startSessionPoll()
+      })
     }
 
     function handleUnauthorized(msg) {
@@ -141,10 +181,28 @@ function renderChatHtml() {
       el.scrollTop = el.scrollHeight
     }
 
+    async function loadInjectStatus() {
+      const composerId = document.getElementById('session-select').value
+      const banner = document.getElementById('inject-banner')
+      if (!composerId) return
+      try {
+        const res = await fetch('/chat/inject-status?composerId=' + encodeURIComponent(composerId), {
+          headers: headers(),
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        const parts = []
+        if (data.sessionName) parts.push('세션: 「' + data.sessionName + '」')
+        if (data.targetWindow) parts.push('PC 창: 「' + data.targetWindow + '」')
+        parts.push(data.hint || '')
+        banner.textContent = parts.join(' · ')
+      } catch (_) {}
+    }
+
     async function loadSessions() {
       const sel = document.getElementById('session-select')
       try {
-        const res = await fetch('/chat/sessions', { headers: headers() })
+        const res = await fetch('/chat/sessions?limit=50', { headers: headers() })
         if (res.status === 401) { handleUnauthorized(); return }
         if (!res.ok) {
           sel.innerHTML = '<option value="">세션 로드 실패</option>'
@@ -166,29 +224,72 @@ function renderChatHtml() {
         }
         sel.onchange = function () {
           localStorage.setItem(SESSION_KEY, sel.value)
-          refreshMessages()
+          messageCache = []
+          lastCreatedAt = null
+          loadInitialMessages()
+          loadInjectStatus()
         }
+        await loadInjectStatus()
       } catch (_) {
         sel.innerHTML = '<option value="">네트워크 오류</option>'
       }
     }
 
-    async function refreshMessages() {
+    function messagesUrl(composerId, incremental) {
+      let url = '/chat/messages?composerId=' + encodeURIComponent(composerId)
+      if (incremental && lastCreatedAt) {
+        url += '&since=' + encodeURIComponent(lastCreatedAt)
+      } else {
+        url += '&tail=80'
+      }
+      return url
+    }
+
+    async function loadInitialMessages() {
       const composerId = document.getElementById('session-select').value
       const bar = document.getElementById('status-bar')
       if (!composerId || !getToken()) return
       try {
-        const res = await fetch('/chat/messages?composerId=' + encodeURIComponent(composerId), {
-          headers: headers(),
-        })
+        const res = await fetch(messagesUrl(composerId, false), { headers: headers() })
         if (res.status === 401) { handleUnauthorized(); return }
         if (!res.ok) {
           bar.textContent = '메시지 로드 실패'
           return
         }
         const data = await res.json()
-        renderMessages(data.messages || [])
-        bar.textContent = '갱신 ' + new Date().toLocaleTimeString()
+        messageCache = data.messages || []
+        lastCreatedAt = data.lastCreatedAt || (messageCache.length
+          ? messageCache[messageCache.length - 1].createdAt
+          : null)
+        renderMessages(messageCache)
+        bar.textContent = '로드 ' + messageCache.length + '건 · ' + new Date().toLocaleTimeString()
+      } catch (_) {
+        bar.textContent = '로드 오류'
+      }
+    }
+
+    async function pollNewMessages() {
+      const composerId = document.getElementById('session-select').value
+      const bar = document.getElementById('status-bar')
+      if (!composerId || !getToken()) return
+      if (!lastCreatedAt) {
+        return loadInitialMessages()
+      }
+      try {
+        const res = await fetch(messagesUrl(composerId, true), { headers: headers() })
+        if (res.status === 401) { handleUnauthorized(); return }
+        if (!res.ok) return
+        const data = await res.json()
+        const incoming = data.messages || []
+        if (incoming.length) {
+          messageCache = messageCache.concat(incoming)
+          if (messageCache.length > MAX_CACHE) {
+            messageCache = messageCache.slice(-MAX_CACHE)
+          }
+          lastCreatedAt = data.lastCreatedAt || incoming[incoming.length - 1].createdAt
+          renderMessages(messageCache)
+        }
+        bar.textContent = '갱신 ' + messageCache.length + '건 · ' + new Date().toLocaleTimeString()
       } catch (_) {
         bar.textContent = '폴링 오류'
       }
@@ -196,12 +297,57 @@ function renderChatHtml() {
 
     function startPoll() {
       stopPoll()
-      refreshMessages()
-      pollTimer = setInterval(refreshMessages, POLL_MS)
+      loadInitialMessages()
+      pollTimer = setInterval(pollNewMessages, POLL_MS)
     }
 
     function stopPoll() {
       if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+    }
+
+    function startSse() {
+      stopSse()
+      if (!getToken()) return
+      sse = new EventSource('/chat/events')
+      sse.onmessage = function (e) {
+        try {
+          const data = JSON.parse(e.data)
+          if (data.type === 'wal') pollNewMessages()
+        } catch (_) {}
+      }
+      sse.onerror = function () {
+        stopSse()
+        setTimeout(startSse, 5000)
+      }
+    }
+
+    function stopSse() {
+      if (sse) { sse.close(); sse = null }
+    }
+
+    async function checkSession() {
+      if (!getToken()) return false
+      try {
+        const res = await fetch('/auth/session', { headers: headers() })
+        return res.ok
+      } catch (_) {
+        return null
+      }
+    }
+
+    function startSessionPoll() {
+      stopSessionPoll()
+      sessionPollTimer = setInterval(async function () {
+        const ok = await checkSession()
+        if (ok === false) handleUnauthorized()
+      }, 30000)
+    }
+
+    function stopSessionPoll() {
+      if (sessionPollTimer) {
+        clearInterval(sessionPollTimer)
+        sessionPollTimer = null
+      }
     }
 
     async function doPair() {
@@ -242,6 +388,23 @@ function renderChatHtml() {
       status.textContent = '전송 중…'
       btn.disabled = true
       try {
+        if (isFocusModeOn()) {
+          const prep = await fetch('/focus/prepare', {
+            method: 'POST',
+            headers: headers(true),
+            body: JSON.stringify({ minimizeOthers: false }),
+          })
+          if (prep.status === 401) {
+            handleUnauthorized()
+            return
+          }
+          if (!prep.ok) {
+            const prepData = await prep.json().catch(() => ({}))
+            status.className = 'err'
+            status.textContent = prepData.error || '집중 준비 실패'
+            return
+          }
+        }
         const res = await fetch('/message', {
           method: 'POST',
           headers: headers(true),
@@ -251,8 +414,8 @@ function renderChatHtml() {
         if (res.ok) {
           document.getElementById('msg').value = ''
           status.className = 'ok'
-          status.textContent = '전송됨 (Cursor inject)'
-          setTimeout(refreshMessages, 800)
+          status.textContent = '전송됨 — PC Cursor inject'
+          setTimeout(pollNewMessages, 600)
         } else if (res.status === 401) {
           handleUnauthorized()
         } else {
@@ -272,8 +435,15 @@ function renderChatHtml() {
       if (e.key === 'Enter') doPair()
     })
     document.getElementById('send').addEventListener('click', sendMsg)
+    document.getElementById('focus-toggle').addEventListener('change', saveFocusMode)
     document.getElementById('msg').addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg() }
+    })
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible' && getToken() && !document.getElementById('app').classList.contains('hidden')) {
+        pollNewMessages()
+      }
     })
 
     ;(function init() {

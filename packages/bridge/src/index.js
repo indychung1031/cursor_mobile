@@ -28,12 +28,14 @@ const {
   verifyPairingCode,
   signToken,
   requireAuth,
+  setAuthCookie,
 } = require('./auth/pairing')
+const { getSetupToken, requireLocalhostOrSetup } = require('./auth/setupToken')
 
 const PORT = Number(process.env.BRIDGE_PORT || 3921)
 const HOST = process.env.BRIDGE_HOST || '0.0.0.0'
 
-const app = fastify({ logger: true })
+const app = fastify({ logger: true, trustProxy: true })
 
 function sendHtml(reply, html) {
   return reply
@@ -60,6 +62,8 @@ app.get('/setup', async (_req, reply) => {
     pairingCode: getPairingCode(),
     cursorWindows: listCursorWindows(),
     targetWindowTitle: config.targetWindowTitle || '',
+    setupToken: getSetupToken(),
+    chatEnabled: process.env.BRIDGE_CHAT === '1',
   })
   return sendHtml(reply, html)
 })
@@ -92,6 +96,7 @@ app.get('/pair', async (req, reply) => {
     return reply.redirect('/?pair_error=invalid')
   }
   const token = signToken()
+  setAuthCookie(reply, token)
   return reply.redirect(`/?cm_token=${encodeURIComponent(token)}`)
 })
 
@@ -102,11 +107,11 @@ if (process.env.BRIDGE_DEV === '1') {
   })
 }
 
-app.get('/auth/pairing-code', async () => ({
+app.get('/auth/pairing-code', { preHandler: requireLocalhostOrSetup }, async () => ({
   code: getPairingCode(),
 }))
 
-app.post('/auth/regenerate', async () => {
+app.post('/auth/regenerate', { preHandler: requireLocalhostOrSetup }, async () => {
   const code = regeneratePairingCode()
   return { code }
 })
@@ -118,7 +123,9 @@ app.post('/auth/pair', async (req, reply) => {
   if (!verifyPairingCode(code)) {
     return reply.code(401).send({ error: 'invalid code' })
   }
-  return { token: signToken() }
+  const token = signToken()
+  setAuthCookie(reply, token)
+  return { token }
 })
 
 app.get('/auth/session', { preHandler: requireAuth }, async () => ({ ok: true }))
@@ -137,7 +144,7 @@ app.get('/setup/windows', async () => {
   }
 })
 
-app.post('/config/window', async (req, reply) => {
+app.post('/config/window', { preHandler: requireLocalhostOrSetup }, async (req, reply) => {
   const title = String(
     req.body?.targetWindowTitle ?? req.body?.title ?? '',
   ).trim()
@@ -267,6 +274,7 @@ if (chatEnabled) {
 }
 
 async function main() {
+  await app.register(require('@fastify/cookie'))
   preventDisplaySleep()
   registerShutdownHooks()
   generatePairingCode()

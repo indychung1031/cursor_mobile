@@ -280,8 +280,11 @@ function renderMobileHtml() {
 
         const fps = h.stream?.streamFps ?? h.streamFps
         const clients = h.stream?.activeClients ?? 0
-        streamEl.textContent = fps + ' fps · 시청 ' + clients
-        streamEl.className = 'health-value ok'
+        const streaming = h.stream?.streaming
+        streamEl.textContent = streaming
+          ? fps + ' fps · 시청 ' + clients
+          : (clients > 0 ? '대기 중 · 시청 ' + clients : '— (스트림 미연결)')
+        streamEl.className = 'health-value ' + (streaming && fps > 0 ? 'ok' : 'warn')
 
         if (h.lastInjectError?.message) {
           injectEl.textContent = h.lastInjectError.message.slice(0, 48)
@@ -398,8 +401,7 @@ function renderMobileHtml() {
         img = replaceStreamImg()
       }
       img.classList.remove('hidden')
-      img.src =
-        '/stream?token=' + encodeURIComponent(getToken()) + '&t=' + Date.now()
+      img.src = '/stream?t=' + Date.now()
     }
 
     function freezeStream() {

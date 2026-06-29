@@ -10,7 +10,7 @@ const BOUNDARY = 'frame'
 /** 전송 간격 (ms) — env STREAM_SEND_MS 로 조정 */
 const SEND_MS = Number(process.env.STREAM_SEND_MS || 120)
 /** 캡처 시도 간격 (ms) — env STREAM_CAPTURE_MS */
-const CAPTURE_MS = Number(process.env.STREAM_CAPTURE_MS || 100)
+const CAPTURE_MS = Number(process.env.STREAM_CAPTURE_MS || 150)
 
 function registerMjpegStream(app, requireAuth) {
   app.get('/stream', { preHandler: requireAuth }, async (req, reply) => {

@@ -7,6 +7,10 @@ try {
   DatabaseSync = null
 }
 
+const DEFAULT_TAIL = 80
+const DEFAULT_SESSION_LIMIT = 50
+const MAX_MESSAGES = 500
+
 function openReadonly() {
   if (!DatabaseSync) {
     throw new Error('node:sqlite unavailable — Node 22+ required')
@@ -27,8 +31,34 @@ function parseJsonValue(raw) {
   }
 }
 
+function parseLimit(raw, fallback, max) {
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n <= 0) return fallback
+  return Math.min(Math.floor(n), max)
+}
+
+function rowToMessage(row) {
+  const msg = parseJsonValue(row.value)
+  if (!msg || typeof msg.text !== 'string') return null
+  const text = msg.text.trim()
+  if (!text) return null
+  const type = Number(msg.type)
+  const role = type === 1 ? 'user' : type === 2 ? 'assistant' : 'unknown'
+  const parts = String(row.key).split(':')
+  const bubbleId = parts.length >= 3 ? parts.slice(2).join(':') : row.key
+  const createdAt = msg.createdAt || msg.timestamp || null
+  return {
+    id: bubbleId,
+    role,
+    type,
+    text,
+    createdAt,
+  }
+}
+
 /** @returns {{ composerId: string, name: string, updatedAt?: string }[]} */
-function listComposers() {
+function listComposers(options = {}) {
+  const limit = parseLimit(options.limit, DEFAULT_SESSION_LIMIT, 200)
   const db = openReadonly()
   try {
     const row = db
@@ -37,22 +67,45 @@ function listComposers() {
     const data = parseJsonValue(row?.value)
     const all = data?.allComposers || data?.composers || []
     if (!Array.isArray(all)) return []
-    return all
+
+    const composers = all
       .map((c) => ({
         composerId: String(c.composerId || c.id || ''),
         name: String(c.name || c.title || '(제목 없음)').trim() || '(제목 없음)',
-        updatedAt: c.updatedAt || c.lastUpdatedAt || null,
+        updatedAt: c.updatedAt || c.lastUpdatedAt || c.createdAt || null,
       }))
       .filter((c) => c.composerId)
+
+    composers.sort((a, b) => {
+      if (a.updatedAt && b.updatedAt) {
+        return String(b.updatedAt).localeCompare(String(a.updatedAt))
+      }
+      return String(b.composerId).localeCompare(String(a.composerId))
+    })
+
+    return composers.slice(0, limit)
   } finally {
     db.close()
   }
 }
 
-/** @returns {{ id: string, role: string, type: number, text: string, createdAt: string|null }[]} */
-function listMessages(composerId) {
+function getComposerById(composerId) {
+  const id = String(composerId || '').trim()
+  if (!id) return null
+  return listComposers({ limit: 200 }).find((c) => c.composerId === id) || null
+}
+
+/**
+ * @param {string} composerId
+ * @param {{ since?: string, limit?: number, tail?: number }} options
+ */
+function listMessages(composerId, options = {}) {
   const id = String(composerId || '').trim()
   if (!id) throw new Error('composerId required')
+
+  const since = options.since ? String(options.since).trim() : ''
+  const tail = parseLimit(options.tail, 0, MAX_MESSAGES)
+  const limit = parseLimit(options.limit, tail || DEFAULT_TAIL, MAX_MESSAGES)
 
   const db = openReadonly()
   try {
@@ -60,27 +113,28 @@ function listMessages(composerId) {
       .prepare('SELECT key, value FROM cursorDiskKV WHERE key LIKE ? ORDER BY key')
       .all(`bubbleId:${id}:%`)
 
-    const messages = []
+    let messages = []
     for (const row of rows) {
-      const msg = parseJsonValue(row.value)
-      if (!msg || typeof msg.text !== 'string') continue
-      const type = Number(msg.type)
-      const role = type === 1 ? 'user' : type === 2 ? 'assistant' : 'unknown'
-      const parts = String(row.key).split(':')
-      const bubbleId = parts.length >= 3 ? parts.slice(2).join(':') : row.key
-      messages.push({
-        id: bubbleId,
-        role,
-        type,
-        text: msg.text,
-        createdAt: msg.createdAt || msg.timestamp || null,
-      })
+      const m = rowToMessage(row)
+      if (m) messages.push(m)
     }
 
     messages.sort((a, b) => {
-      if (a.createdAt && b.createdAt) return String(a.createdAt).localeCompare(String(b.createdAt))
+      if (a.createdAt && b.createdAt) {
+        return String(a.createdAt).localeCompare(String(b.createdAt))
+      }
       return String(a.id).localeCompare(String(b.id))
     })
+
+    if (since) {
+      messages = messages.filter((m) => m.createdAt && String(m.createdAt) > since)
+      if (limit) messages = messages.slice(0, limit)
+    } else if (tail > 0) {
+      messages = messages.slice(-tail)
+    } else if (limit) {
+      messages = messages.slice(-limit)
+    }
+
     return messages
   } finally {
     db.close()
@@ -89,7 +143,6 @@ function listMessages(composerId) {
 
 function getChatHealth() {
   return {
-    dbPath: getStateDbPath(),
     dbExists: dbExists(),
     sqliteAvailable: Boolean(DatabaseSync),
     sqliteEngine: 'node:sqlite',
@@ -99,6 +152,9 @@ function getChatHealth() {
 module.exports = {
   listComposers,
   listMessages,
+  getComposerById,
   getChatHealth,
   openReadonly,
+  DEFAULT_TAIL,
+  DEFAULT_SESSION_LIMIT,
 }

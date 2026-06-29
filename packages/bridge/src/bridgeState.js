@@ -39,8 +39,9 @@ function streamClientDisconnected() {
 function getStreamStats(targetFps) {
   return {
     targetFps,
-    streamFps: streamFps || targetFps,
+    streamFps,
     activeClients: activeStreamClients,
+    streaming: activeStreamClients > 0,
   }
 }
 

@@ -67,6 +67,8 @@ function renderSetupHtml({
   pairingCode,
   cursorWindows = [],
   targetWindowTitle = '',
+  setupToken = '',
+  chatEnabled = false,
 }) {
   const lanIp = getLanIp()
   const mobileUrl = buildConnectUrl(tailscaleIp, port, pairingCode)
@@ -213,7 +215,8 @@ function renderSetupHtml({
     <table>${urlRows}</table>
 
     <button type="button" onclick="regenCode()">새 코드 생성</button>
-    <button type="button" class="secondary" onclick="location.href='/'">모바일 화면 미리보기</button>
+    <button type="button" class="secondary" onclick="location.href='/'">모바일 화면 (B모드 · 영상)</button>
+    ${chatEnabled ? `<button type="button" class="secondary" onclick="location.href='/chat'">모바일 화면 (C모드 · 채팅)</button>` : ''}
 
     <div class="note">
       <strong>메시지 입력 대상 Cursor 창</strong><br>
@@ -232,6 +235,12 @@ function renderSetupHtml({
   </div>
   <script>
     let lastCode = ${pairingCode ? JSON.stringify(pairingCode) : 'null'}
+    const SETUP_TOKEN = ${JSON.stringify(setupToken)}
+    const setupHeaders = (json) => {
+      const h = { 'X-Setup-Token': SETUP_TOKEN }
+      if (json) h['Content-Type'] = 'application/json'
+      return h
+    }
 
     function connectUrl(host, port, code) {
       const base = 'http://' + host + ':' + port
@@ -255,7 +264,7 @@ function renderSetupHtml({
     }
 
     async function refreshCode() {
-      const res = await fetch('/auth/pairing-code')
+      const res = await fetch('/auth/pairing-code', { headers: setupHeaders() })
       const data = await res.json()
       const box = document.getElementById('code-box')
       if (data.code) {
@@ -272,7 +281,7 @@ function renderSetupHtml({
     async function regenCode() {
       const res = await fetch('/auth/regenerate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: setupHeaders(true),
         body: '{}',
       })
       if (!res.ok) {
@@ -330,7 +339,7 @@ function renderSetupHtml({
       try {
         const res = await fetch('/config/window', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: setupHeaders(true),
           body: JSON.stringify({ targetWindowTitle: title }),
         })
         const data = await res.json().catch(function () { return {} })
