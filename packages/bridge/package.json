@@ -20,10 +20,12 @@
     "test:scroll-c1": "node scripts/test-scroll-c1.js",
     "test:mobile-c2": "node scripts/test-mobile-c2.js",
     "test:mobile-c3": "node scripts/test-mobile-c3.js",
-    "test:health-f1": "node scripts/test-health-f1.js"
+    "test:health-f1": "node scripts/test-health-f1.js",
+    "test:chat-spike": "node scripts/test-chat-spike.js",
+    "test:chat-api": "node scripts/test-chat-api.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "dependencies": {
     "clipboardy": "^2.3.0",

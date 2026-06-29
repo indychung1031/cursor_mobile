@@ -260,6 +260,12 @@ app.post('/scroll', { preHandler: requireAuth }, async (req, reply) => {
 
 registerMjpegStream(app, requireAuth)
 
+const chatEnabled = process.env.BRIDGE_CHAT === '1'
+if (chatEnabled) {
+  const { registerChatMode } = require('./chat/register')
+  registerChatMode(app, requireAuth, sendHtml)
+}
+
 async function main() {
   preventDisplaySleep()
   registerShutdownHooks()
@@ -284,6 +290,9 @@ async function main() {
   app.log.info(`setup (PC):   http://localhost:${PORT}/setup  ← 페어링 코드`)
   if (process.env.BRIDGE_DEV === '1') {
     app.log.info(`dev (PC):     http://localhost:${PORT}/dev  ← WP 스모크 검증`)
+  }
+  if (chatEnabled) {
+    app.log.info(`chat (C):     http://localhost:${PORT}/chat  ← BRIDGE_CHAT=1`)
   }
   if (urls.tailscale) {
     const base = urls.tailscale.replace('/health', '')
